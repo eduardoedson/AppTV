@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "items": [{
+    "id": "movie-demo",
+    "type": "movie",
+    "title": "Filme de demonstração",
+    "description": "Substitua a URL por um arquivo HTTPS reproduzível.",
+    "addedAt": "2026-10-25T00:00:00Z",
+    "sources": [{
+      "id": "movie-demo-pt-1080",
+      "name": "Dublado",
+      "language": "pt-PT",
+      "quality": "1080p",
+      "mimeType": "video/mp4",
+      "provider": "direct",
+      "url": "https://example.com/video.mp4"
+    }]
+  }]
+}

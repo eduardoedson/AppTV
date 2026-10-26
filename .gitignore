@@ -1,0 +1,91 @@
+# ---------------------------------------------------------------
+# AppTV
+# ---------------------------------------------------------------
+
+# Local secrets: Google OAuth credentials, API keys and URLs (template in .env.example)
+.env
+.env.local
+.env.*.local
+
+# Downloaded episodes (large media files)
+/videos/
+
+# Catalog and update manifest: the published copies live on Google Drive
+/AppTV.catalago.json
+/AppTV.update.json
+
+# Local backups and editor history
+/.backup-*/
+.history/
+
+# Jest cache configured in jest.config.js
+/.jest-cache/
+
+# ---------------------------------------------------------------
+# Node.js
+# ---------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# ---------------------------------------------------------------
+# React Native / Metro
+# ---------------------------------------------------------------
+*.jsbundle
+.metro-health-check*
+/coverage
+
+# ---------------------------------------------------------------
+# Android / Gradle / IntelliJ
+# ---------------------------------------------------------------
+build/
+.gradle/
+.cxx/
+.kotlin/
+local.properties
+*.iml
+*.hprof
+.idea/
+captures/
+*.apk
+*.aab
+# Release keystores must never be committed; the debug keystore is shared on purpose
+*.keystore
+*.jks
+!debug.keystore
+
+# ---------------------------------------------------------------
+# iOS / Xcode (not used by the TV app, kept from the template)
+# ---------------------------------------------------------------
+**/Pods/
+/vendor/bundle/
+DerivedData
+xcuserdata
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.xcuserstate
+**/.xcode.env.local
+
+# ---------------------------------------------------------------
+# Fastlane
+# ---------------------------------------------------------------
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots
+**/fastlane/test_output
+
+# ---------------------------------------------------------------
+# Operating systems
+# ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

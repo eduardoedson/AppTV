@@ -63,6 +63,19 @@ const PLAYER_ERROR_MESSAGES: Record<string, string> = {
   '4005': 'Codec de vídeo ou áudio não suportado pela TV.',
 };
 
+const normalizedPlayerErrorCode = (error: unknown): string => {
+  const fields = error && typeof error === 'object' ? (error as Record<string, unknown>) : {};
+  const value = fields.errorCode;
+  const rawCode =
+    typeof value === 'string' || typeof value === 'number' ? String(value).replace(/\D/g, '') : '';
+  // react-native-video prefixes Media3/ExoPlayer codes with "2"
+  // (for example, Media3 4003 is emitted as 24003).
+  return rawCode.length === 5 && rawCode.startsWith('2') ? rawCode.slice(1) : rawCode;
+};
+
+export const shouldUseSoftwareDecoder = (error: unknown): boolean =>
+  ['3003', '4001', '4003', '4004', '4005'].includes(normalizedPlayerErrorCode(error));
+
 export const describePlaybackError = (error: unknown, fromDrive: boolean): string => {
   const fields = error && typeof error === 'object' ? (error as Record<string, unknown>) : {};
   const text = (key: string): string => {
@@ -73,7 +86,7 @@ export const describePlaybackError = (error: unknown, fromDrive: boolean): strin
   const raw = [text('errorString'), text('errorException'), text('error'), text('localizedDescription')]
     .filter(Boolean)
     .join(' ');
-  const code = text('errorCode').replace(/\D/g, '');
+  const code = normalizedPlayerErrorCode(error);
   const status = raw.match(/Response code:\s*(\d{3})/i)?.[1] ?? raw.match(/\bHTTP\s*(\d{3})\b/i)?.[1];
   if (status === '401') {
     return fromDrive ? 'Sessão do Google Drive expirada (HTTP 401). Tente novamente.' : 'Acesso não autorizado (HTTP 401).';

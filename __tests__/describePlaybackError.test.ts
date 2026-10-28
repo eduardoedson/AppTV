@@ -1,4 +1,4 @@
-import {describePlaybackError} from '../src/catalog/sourceResolver';
+import {describePlaybackError, shouldUseSoftwareDecoder} from '../src/catalog/sourceResolver';
 
 describe('describePlaybackError', () => {
   it('ignores line numbers from the stack trace', () => {
@@ -24,5 +24,22 @@ describe('describePlaybackError', () => {
     expect(describePlaybackError({errorString: 'Something failed', errorCode: '1000'}, false)).toBe(
       'Something failed (código 1000)',
     );
+  });
+
+  it('removes the react-native-video prefix from Media3 error codes', () => {
+    expect(
+      describePlaybackError(
+        {
+          errorString: 'ExoPlaybackException: ERROR_CODE_DECODING_FAILED',
+          errorCode: '24003',
+        },
+        true,
+      ),
+    ).toBe('Falha ao decodificar o vídeo. (código 4003)');
+  });
+
+  it('selects the software fallback for decoder failures', () => {
+    expect(shouldUseSoftwareDecoder({errorCode: '24003'})).toBe(true);
+    expect(shouldUseSoftwareDecoder({errorCode: '22002'})).toBe(false);
   });
 });

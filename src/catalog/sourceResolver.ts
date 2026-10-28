@@ -73,9 +73,6 @@ const normalizedPlayerErrorCode = (error: unknown): string => {
   return rawCode.length === 5 && rawCode.startsWith('2') ? rawCode.slice(1) : rawCode;
 };
 
-export const shouldUseSoftwareDecoder = (error: unknown): boolean =>
-  ['3003', '4001', '4003', '4004', '4005'].includes(normalizedPlayerErrorCode(error));
-
 export const describePlaybackError = (error: unknown, fromDrive: boolean): string => {
   const fields = error && typeof error === 'object' ? (error as Record<string, unknown>) : {};
   const text = (key: string): string => {

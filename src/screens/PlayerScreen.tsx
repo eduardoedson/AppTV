@@ -20,11 +20,6 @@ import Video, {
   ResizeMode,
   VideoRef,
 } from 'react-native-video';
-import VLCPlayer, {
-  VLCHardwareDecoder,
-  type VLCPlayerRef,
-  type VLCProgressEvent,
-} from '@lunarr/vlc-player';
 import { PlayerParams, RootStackParamList } from '../navigation/types';
 import { colors } from '../theme';
 import { TVButton } from '../components/TVButton';
@@ -42,7 +37,6 @@ import {
   isDriveSource,
   requestHeadersFor,
   resolveMediaUrl,
-  shouldUseSoftwareDecoder,
 } from '../catalog/sourceResolver';
 import {
   getDriveAccessToken,
@@ -107,7 +101,6 @@ export function PlayerScreen({ navigation, route }: Props) {
   const resolved = useMemo(() => resolveSource(source), [source]);
 
   const video = useRef<VideoRef>(null);
-  const softwareVideo = useRef<VLCPlayerRef>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Refs keep the latest values for callbacks without re-creating effects on every progress tick.
   const positionRef = useRef(0);
@@ -123,7 +116,6 @@ export function PlayerScreen({ navigation, route }: Props) {
   const [durationMs, setDurationMs] = useState(0);
   const [error, setErrorState] = useState<string | null>(resolved.error);
   const [attempt, setAttempt] = useState(0);
-  const [softwareDecoder, setSoftwareDecoder] = useState(false);
   // Private Drive videos need a fresh Google access token before the player starts
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(!resolved.needsAuth);
@@ -216,13 +208,12 @@ export function PlayerScreen({ navigation, route }: Props) {
         0,
         Math.min(duration, positionRef.current + seconds * 1000),
       );
-      if (softwareDecoder) softwareVideo.current?.seek(next / 1000);
-      else video.current?.seek(next / 1000);
+      video.current?.seek(next / 1000);
       positionRef.current = next;
       setPositionMs(next);
       showControls();
     },
-    [showControls, softwareDecoder],
+    [showControls],
   );
 
   const togglePause = useCallback(() => {
@@ -405,14 +396,6 @@ export function PlayerScreen({ navigation, route }: Props) {
     [accessToken, source.provider, source.url],
   );
 
-  // VLC does not expose arbitrary HTTP headers. Google accepts the same OAuth
-  // token as a query parameter, so the software fallback can read private files.
-  const softwareUri = useMemo(() => {
-    if (!resolved.uri || !accessToken || !resolved.fromDrive) return resolved.uri;
-    const separator = resolved.uri.includes('?') ? '&' : '?';
-    return `${resolved.uri}${separator}access_token=${encodeURIComponent(accessToken)}`;
-  }, [accessToken, resolved.fromDrive, resolved.uri]);
-
   // Remember the chosen version for this movie or series.
   useEffect(() => {
     preferenceRepository.saveSourceName(contentId, source.name);
@@ -484,7 +467,7 @@ export function PlayerScreen({ navigation, route }: Props) {
     };
   }, [seekBy, setControls, showControls, togglePause]);
 
-  const onLoad = (data: OnLoadData | VLCProgressEvent) => {
+  const onLoad = (data: OnLoadData) => {
     const duration = data.duration * 1000;
     durationRef.current = duration;
     setDurationMs(duration);
@@ -496,14 +479,13 @@ export function PlayerScreen({ navigation, route }: Props) {
         ? params.startPositionMs
         : resumablePosition(progressRepository.getLatest(contentId, episodeId));
     if (resume > 0 && resume < duration) {
-      if (softwareDecoder) softwareVideo.current?.seek(resume / 1000);
-      else video.current?.seek(resume / 1000);
+      video.current?.seek(resume / 1000);
       positionRef.current = resume;
       setPositionMs(resume);
     }
   };
 
-  const onProgress = (data: OnProgressData | VLCProgressEvent) => {
+  const onProgress = (data: OnProgressData) => {
     const position = data.currentTime * 1000;
     positionRef.current = position;
     setPositionMs(position);
@@ -516,30 +498,7 @@ export function PlayerScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.screen}>
-      {softwareDecoder && softwareUri && authReady && !(resolved.needsAuth && !accessToken) ? (
-        <VLCPlayer
-          key={`${sourceId}:${attempt}:software`}
-          ref={softwareVideo}
-          source={{
-            uri: softwareUri,
-            isNetwork: true,
-            hwDecoderEnabled: VLCHardwareDecoder.Disabled,
-          }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="contain"
-          autoplay
-          paused={paused}
-          progressUpdateInterval={1000}
-          continueAudioInBackground={false}
-          showNowPlaying={false}
-          onLoad={onLoad}
-          onProgress={onProgress}
-          onEnd={onEnd}
-          onError={() =>
-            setError('Não foi possível reproduzir este vídeo nem com o decodificador alternativo.')
-          }
-        />
-      ) : resolved.uri && authReady && !(resolved.needsAuth && !accessToken) ? (
+      {resolved.uri && authReady && !(resolved.needsAuth && !accessToken) ? (
         <Video
           key={`${sourceId}:${attempt}`}
           ref={video}
@@ -551,14 +510,9 @@ export function PlayerScreen({ navigation, route }: Props) {
           onLoad={onLoad}
           onProgress={onProgress}
           onEnd={onEnd}
-          onError={value => {
-            if (shouldUseSoftwareDecoder(value.error)) {
-              setError(null);
-              setSoftwareDecoder(true);
-              return;
-            }
-            setError(describePlaybackError(value.error, resolved.fromDrive));
-          }}
+          onError={value =>
+            setError(describePlaybackError(value.error, resolved.fromDrive))
+          }
         />
       ) : null}
       {controls ? (

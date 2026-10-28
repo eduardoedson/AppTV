@@ -1,4 +1,4 @@
-import {describePlaybackError, shouldUseSoftwareDecoder} from '../src/catalog/sourceResolver';
+import {describePlaybackError} from '../src/catalog/sourceResolver';
 
 describe('describePlaybackError', () => {
   it('ignores line numbers from the stack trace', () => {
@@ -36,10 +36,5 @@ describe('describePlaybackError', () => {
         true,
       ),
     ).toBe('Falha ao decodificar o vídeo. (código 4003)');
-  });
-
-  it('selects the software fallback for decoder failures', () => {
-    expect(shouldUseSoftwareDecoder({errorCode: '24003'})).toBe(true);
-    expect(shouldUseSoftwareDecoder({errorCode: '22002'})).toBe(false);
   });
 });

@@ -40,6 +40,8 @@ export function PosterCard({
             source={{ uri: posterUri }}
             style={styles.poster}
             resizeMode="cover"
+            resizeMethod="resize"
+            fadeDuration={0}
             onError={() => setImageFailed(true)}
           />
         ) : (

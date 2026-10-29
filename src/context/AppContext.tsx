@@ -33,20 +33,30 @@ export function AppProvider({children}: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     (async () => {
       try {
+        // Let Android draw the first frame before opening SQLite and parsing the cache.
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+        if (!active) return;
         initializeDatabase();
         const [savedUrl, cached] = await Promise.all([settings.getCatalogUrl(), loadCachedCatalog()]);
+        if (!active) return;
         // Fall back to the built-in catalog when no URL was configured yet
         const url = savedUrl || DEFAULT_CATALOG_URL || null;
         setCatalogUrl(url);
         setCatalog(cached);
+        // The cached catalog is enough to open the library. Do not hold the
+        // startup screen while the network or Google Drive is slow.
+        setReady(true);
         if (url) {
           try {
             const result = await fetchCatalog(url);
+            if (!active) return;
             setCatalog(result.catalog);
             setError(describeSkipped(result));
           } catch (reason) {
+            if (!active) return;
             setError(
               cached
                 ? 'Não foi possível atualizar o catálogo. Exibindo a última versão salva.'
@@ -55,11 +65,14 @@ export function AppProvider({children}: PropsWithChildren) {
           }
         }
       } catch (reason) {
+        if (!active) return;
         setError(messageOf(reason, 'Falha ao iniciar o aplicativo.'));
-      } finally {
         setReady(true);
       }
     })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const refreshCatalog = useCallback(async (url?: string) => {

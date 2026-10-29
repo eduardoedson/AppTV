@@ -188,8 +188,11 @@ export function LibraryScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
           columnWrapperStyle={styles.row}
-          initialNumToRender={12}
-          windowSize={5}
+          initialNumToRender={Math.min(columnCount * 2, 8)}
+          maxToRenderPerBatch={4}
+          updateCellsBatchingPeriod={80}
+          windowSize={3}
+          removeClippedSubviews
           renderItem={({ item: entry, index }) => (
             <PosterCard
               item={entry.item}

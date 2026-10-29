@@ -33,7 +33,7 @@ export function PosterCard({
       onPress={onPress}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      style={[styles.card, focused && styles.cardFocused]}
+      style={styles.card}
     >
       <View style={[styles.frame, focused && styles.frameFocused]}>
         {posterUri ? (
@@ -46,13 +46,7 @@ export function PosterCard({
             onError={() => setImageFailed(true)}
           />
         ) : (
-          <View
-            style={[
-              styles.poster,
-              styles.placeholder,
-              focused && styles.placeholderFocused,
-            ]}
-          >
+          <View style={[styles.poster, styles.placeholder]}>
             <View style={styles.coverBandWide} />
             <View style={styles.coverBandThin} />
             <View style={styles.coverBlock} />
@@ -60,18 +54,8 @@ export function PosterCard({
             <Text style={styles.placeholderTitle} numberOfLines={3}>
               {item.title}
             </Text>
-            <View
-              style={[
-                styles.placeholderPlay,
-                focused && styles.placeholderPlayFocused,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.placeholderPlayIcon,
-                  focused && styles.placeholderPlayIconFocused,
-                ]}
-              >
+            <View style={styles.placeholderPlay}>
+              <Text style={styles.placeholderPlayIcon}>
                 ▶
               </Text>
             </View>
@@ -82,27 +66,18 @@ export function PosterCard({
             {item.type === 'movie' ? 'FILME' : 'SÉRIE'}
           </Text>
         </View>
-        {focused ? (
-          <View style={styles.focusBadge}>
-            <Text style={styles.focusBadgeText}>SELECIONADO</Text>
-          </View>
-        ) : null}
         {showProgress ? (
           <ProgressBar ratio={progressRatio ?? 0} style={styles.progress} />
         ) : null}
       </View>
       {posterUri ? (
-        <Text numberOfLines={2} style={[styles.title, focused && styles.titleFocused]}>
+        <Text numberOfLines={2} style={styles.title}>
           {item.title}
         </Text>
       ) : null}
       <Text
         numberOfLines={1}
-        style={[
-          styles.subtitle,
-          !posterUri && styles.placeholderSubtitle,
-          focused && styles.subtitleFocused,
-        ]}
+        style={[styles.subtitle, !posterUri && styles.placeholderSubtitle]}
       >
         {subtitle ?? (item.type === 'movie' ? 'FILME' : 'SÉRIE')}
       </Text>
@@ -116,16 +91,6 @@ const styles = StyleSheet.create({
     marginRight: 14,
     width: 194,
   },
-  cardFocused: {
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: 12,
-    elevation: 14,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.75,
-    shadowRadius: 22,
-    transform: [{ scale: 1.08 }, { translateY: -5 }],
-  },
   frame: {
     backgroundColor: colors.surface,
     borderColor: 'transparent',
@@ -134,7 +99,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   frameFocused: {
-    borderColor: colors.accent,
+    borderColor: 'rgba(255, 255, 255, 0.55)',
   },
   poster: { backgroundColor: colors.surface, height: 268, width: 194 },
   placeholder: {
@@ -145,7 +110,6 @@ const styles = StyleSheet.create({
     paddingBottom: 22,
     paddingHorizontal: 17,
   },
-  placeholderFocused: { backgroundColor: '#21102F' },
   coverBandWide: {
     backgroundColor: colors.primary,
     height: 76,
@@ -195,16 +159,11 @@ const styles = StyleSheet.create({
     right: 15,
     width: 38,
   },
-  placeholderPlayFocused: {
-    backgroundColor: colors.text,
-    transform: [{ scale: 1.1 }],
-  },
   placeholderPlayIcon: {
     color: colors.text,
     fontSize: 14,
     marginLeft: 2,
   },
-  placeholderPlayIconFocused: { color: colors.primary },
   placeholderTitle: {
     color: colors.text,
     fontSize: 21,
@@ -228,21 +187,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1,
   },
-  focusBadge: {
-    backgroundColor: colors.accent,
-    borderRadius: 5,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    position: 'absolute',
-    right: 9,
-    top: 9,
-  },
-  focusBadgeText: {
-    color: '#13091D',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.7,
-  },
   progress: {
     borderRadius: 0,
     bottom: 0,
@@ -257,7 +201,6 @@ const styles = StyleSheet.create({
     marginTop: 11,
     paddingHorizontal: 3,
   },
-  titleFocused: { color: colors.accent },
   subtitle: {
     color: colors.muted,
     fontSize: 11,
@@ -266,5 +209,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
   },
   placeholderSubtitle: { marginTop: 10 },
-  subtitleFocused: { color: colors.text },
 });

@@ -94,12 +94,12 @@ export function UpdateScreen({navigation}: Props) {
 
       <View style={styles.card}>
         <Text style={styles.label}>Versão instalada</Text>
-        <Text style={styles.value}>{current ? `${current.versionName} (${current.versionCode})` : '...'}</Text>
+        <Text style={styles.value}>{current ? current.versionName : '...'}</Text>
         {latest ? (
           <>
             <Text style={[styles.label, styles.spaced]}>Versão mais recente</Text>
             <Text style={styles.value}>
-              {latest.versionName} ({latest.versionCode}){published ? `  •  ${published}` : ''}
+              {latest.versionName}{published ? `  •  ${published}` : ''}
             </Text>
             {latest.notes ? <Text style={styles.notes}>{latest.notes}</Text> : null}
           </>

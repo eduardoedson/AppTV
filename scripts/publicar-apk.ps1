@@ -58,7 +58,7 @@ if (-not $VersionName) {
 $updatedGradle = [regex]::Replace($originalGradle, 'versionCode\s+\d+', "versionCode $newCode", 1)
 $updatedGradle = [regex]::Replace($updatedGradle, 'versionName\s+"[^"]+"', "versionName `"$VersionName`"", 1)
 Write-Utf8File $gradleFile $updatedGradle
-Write-Host "Version: $oldName ($oldCode) -> $VersionName ($newCode)"
+Write-Host "Version: $oldName -> $VersionName"
 
 function Restore-Version {
     Write-Utf8File $gradleFile $originalGradle

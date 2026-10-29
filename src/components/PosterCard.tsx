@@ -28,13 +28,14 @@ export function PosterCard({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={item.title}
+      accessibilityState={{ selected: focused }}
       hasTVPreferredFocus={hasTVPreferredFocus}
       onPress={onPress}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       style={[styles.card, focused && styles.cardFocused]}
     >
-      <View style={styles.frame}>
+      <View style={[styles.frame, focused && styles.frameFocused]}>
         {posterUri ? (
           <Image
             source={{ uri: posterUri }}
@@ -81,18 +82,27 @@ export function PosterCard({
             {item.type === 'movie' ? 'FILME' : 'SÉRIE'}
           </Text>
         </View>
+        {focused ? (
+          <View style={styles.focusBadge}>
+            <Text style={styles.focusBadgeText}>SELECIONADO</Text>
+          </View>
+        ) : null}
         {showProgress ? (
           <ProgressBar ratio={progressRatio ?? 0} style={styles.progress} />
         ) : null}
       </View>
       {posterUri ? (
-        <Text numberOfLines={2} style={styles.title}>
+        <Text numberOfLines={2} style={[styles.title, focused && styles.titleFocused]}>
           {item.title}
         </Text>
       ) : null}
       <Text
         numberOfLines={1}
-        style={[styles.subtitle, !posterUri && styles.placeholderSubtitle]}
+        style={[
+          styles.subtitle,
+          !posterUri && styles.placeholderSubtitle,
+          focused && styles.subtitleFocused,
+        ]}
       >
         {subtitle ?? (item.type === 'movie' ? 'FILME' : 'SÉRIE')}
       </Text>
@@ -107,17 +117,24 @@ const styles = StyleSheet.create({
     width: 194,
   },
   cardFocused: {
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: 12,
     elevation: 14,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.75,
     shadowRadius: 22,
-    transform: [{ scale: 1.06 }, { translateY: -3 }],
+    transform: [{ scale: 1.08 }, { translateY: -5 }],
   },
   frame: {
     backgroundColor: colors.surface,
+    borderColor: 'transparent',
     borderRadius: 8,
+    borderWidth: 3,
     overflow: 'hidden',
+  },
+  frameFocused: {
+    borderColor: colors.accent,
   },
   poster: { backgroundColor: colors.surface, height: 268, width: 194 },
   placeholder: {
@@ -211,6 +228,21 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1,
   },
+  focusBadge: {
+    backgroundColor: colors.accent,
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    position: 'absolute',
+    right: 9,
+    top: 9,
+  },
+  focusBadgeText: {
+    color: '#13091D',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.7,
+  },
   progress: {
     borderRadius: 0,
     bottom: 0,
@@ -225,6 +257,7 @@ const styles = StyleSheet.create({
     marginTop: 11,
     paddingHorizontal: 3,
   },
+  titleFocused: { color: colors.accent },
   subtitle: {
     color: colors.muted,
     fontSize: 11,
@@ -233,4 +266,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
   },
   placeholderSubtitle: { marginTop: 10 },
+  subtitleFocused: { color: colors.text },
 });

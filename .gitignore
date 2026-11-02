@@ -89,3 +89,6 @@ xcuserdata
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Captured TV logs
+/logs/

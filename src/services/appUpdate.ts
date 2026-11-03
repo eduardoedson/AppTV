@@ -67,5 +67,5 @@ export const installUpdate = async (
   onProgress?: (received: number, total: number) => void,
 ): Promise<void> => {
   const request = await resolveDriveRequest(manifest.apkUrl);
-  await downloadAndInstallApk(request.url, request.headers, onProgress);
+  await downloadAndInstallApk(request.url, request.headers, manifest.versionCode, onProgress);
 };

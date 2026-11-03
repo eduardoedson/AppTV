@@ -134,7 +134,11 @@ export function UpdateScreen({navigation}: Props) {
 
       <View style={styles.actions}>
         {status === 'available' || status === 'installing' ? (
-          <TVButton label="Baixar e instalar" onPress={install} hasTVPreferredFocus />
+          <TVButton
+            label={status === 'installing' ? 'Abrir instalador novamente' : 'Baixar e instalar'}
+            onPress={install}
+            hasTVPreferredFocus
+          />
         ) : null}
         {status === 'needsPermission' ? (
           <TVButton label="Abrir configurações" onPress={() => openInstallPermissionSettings()} hasTVPreferredFocus />

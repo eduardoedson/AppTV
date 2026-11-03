@@ -1,6 +1,7 @@
 package com.apptvclient.updater
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -79,18 +80,27 @@ class ApkUpdaterModule(private val reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
-  fun downloadAndInstall(url: String, headers: ReadableMap?, promise: Promise) {
+  fun downloadAndInstall(url: String, headers: ReadableMap?, expectedVersionCode: Double, promise: Promise) {
     thread(name = "ApkUpdaterDownload") {
       try {
         val directory = File(reactContext.cacheDir, UPDATES_DIRECTORY).apply { mkdirs() }
         val apkFile = File(directory, APK_FILE_NAME)
-        if (apkFile.exists()) apkFile.delete()
+        val partialFile = File(directory, "$APK_FILE_NAME.part")
+
+        // If the download completed before but the Android installer did not open (or was
+        // dismissed), reuse it. This avoids downloading the same version a second time.
+        if (isExpectedApk(apkFile, expectedVersionCode.toLong())) {
+          installApk(apkFile)
+          promise.resolve(apkFile.absolutePath)
+          return@thread
+        }
+        partialFile.delete()
 
         val connection = openConnection(url, headers)
         val total = connection.contentLengthLong
         try {
           connection.inputStream.use { input ->
-            FileOutputStream(apkFile).use { output ->
+            FileOutputStream(partialFile).use { output ->
               val buffer = ByteArray(BUFFER_SIZE)
               var received = 0L
               var lastEmit = 0L
@@ -112,7 +122,17 @@ class ApkUpdaterModule(private val reactContext: ReactApplicationContext) :
           connection.disconnect()
         }
 
-        if (apkFile.length() == 0L) throw IOException("O arquivo baixado está vazio.")
+        if (partialFile.length() == 0L) throw IOException("O arquivo baixado está vazio.")
+        if (!isExpectedApk(partialFile, expectedVersionCode.toLong())) {
+          partialFile.delete()
+          throw IOException("O APK baixado é inválido ou pertence a outra versão.")
+        }
+        if (apkFile.exists() && !apkFile.delete()) {
+          throw IOException("Não foi possível substituir a atualização anterior.")
+        }
+        if (!partialFile.renameTo(apkFile)) {
+          throw IOException("Não foi possível guardar a atualização baixada.")
+        }
         installApk(apkFile)
         promise.resolve(apkFile.absolutePath)
       } catch (error: Exception) {
@@ -164,10 +184,27 @@ class ApkUpdaterModule(private val reactContext: ReactApplicationContext) :
   private fun installApk(apkFile: File) {
     val uri = FileProvider.getUriForFile(reactContext, "${reactContext.packageName}.updates", apkFile)
     val intent =
-        Intent(Intent.ACTION_VIEW)
+        Intent(Intent.ACTION_INSTALL_PACKAGE)
             .setDataAndType(uri, "application/vnd.android.package-archive")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            .apply { clipData = ClipData.newRawUri("Atualização do AppTV", uri) }
+
+    // Some Android TV installers only honor an explicit URI grant.
+    val handlers = reactContext.packageManager.queryIntentActivities(intent, 0)
+    if (handlers.isEmpty()) throw ActivityNotFoundException("Nenhum instalador de APK foi encontrado.")
+    handlers.forEach { info ->
+      reactContext.grantUriPermission(info.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
     reactContext.startActivity(intent)
+  }
+
+  private fun isExpectedApk(file: File, expectedVersionCode: Long): Boolean {
+    if (!file.isFile || file.length() == 0L) return false
+    val info = reactContext.packageManager.getPackageArchiveInfo(file.absolutePath, 0) ?: return false
+    val versionCode =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode
+        else @Suppress("DEPRECATION") info.versionCode.toLong()
+    return info.packageName == reactContext.packageName && versionCode == expectedVersionCode
   }
 
   private fun emitProgress(received: Long, total: Long) {

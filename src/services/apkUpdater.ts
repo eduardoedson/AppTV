@@ -9,7 +9,7 @@ interface ApkUpdaterNative {
   getAppVersion(): Promise<AppVersion>;
   canInstallPackages(): Promise<boolean>;
   openInstallPermissionSettings(): Promise<boolean>;
-  downloadAndInstall(url: string, headers: Record<string, string>): Promise<string>;
+  downloadAndInstall(url: string, headers: Record<string, string>, versionCode: number): Promise<string>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }
@@ -33,6 +33,7 @@ export const openInstallPermissionSettings = async (): Promise<void> => {
 export const downloadAndInstallApk = async (
   url: string,
   headers: Record<string, string>,
+  versionCode: number,
   onProgress?: (received: number, total: number) => void,
 ): Promise<void> => {
   if (!native) throw new Error('A atualização automática só funciona no app instalado no Android.');
@@ -41,7 +42,7 @@ export const downloadAndInstallApk = async (
     onProgress?.(event.received, event.total),
   );
   try {
-    await native.downloadAndInstall(url, headers);
+    await native.downloadAndInstall(url, headers, versionCode);
   } finally {
     subscription.remove();
   }

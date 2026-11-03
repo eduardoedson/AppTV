@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {Pressable, StyleProp, StyleSheet, Text, ViewStyle} from 'react-native';
+import {Pressable, StyleProp, StyleSheet, Text, View, ViewStyle} from 'react-native';
 import {colors} from '../theme';
 
 interface Props {
@@ -8,9 +8,19 @@ interface Props {
   disabled?: boolean;
   hasTVPreferredFocus?: boolean;
   style?: StyleProp<ViewStyle>;
+  icon?: string;
+  emphasized?: boolean;
 }
 
-export function TVButton({label, onPress, disabled, hasTVPreferredFocus, style}: Props) {
+export function TVButton({
+  label,
+  onPress,
+  disabled,
+  hasTVPreferredFocus,
+  style,
+  icon,
+  emphasized = false,
+}: Props) {
   const [focused, setFocused] = useState(false);
   return (
     <Pressable
@@ -21,16 +31,30 @@ export function TVButton({label, onPress, disabled, hasTVPreferredFocus, style}:
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onPress={onPress}
-      style={[styles.button, focused && styles.focused, disabled && styles.disabled, style]}>
-      <Text style={[styles.label, focused && styles.focusedLabel]}>{label}</Text>
+      style={[
+        styles.button,
+        emphasized && styles.emphasized,
+        focused && styles.focused,
+        disabled && styles.disabled,
+        style,
+      ]}>
+      <View style={styles.content}>
+        {icon ? (
+          <Text style={[styles.icon, focused && styles.focusedLabel]}>{icon}</Text>
+        ) : null}
+        <Text style={[styles.label, focused && styles.focusedLabel]}>{label}</Text>
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {backgroundColor: colors.surfaceRaised, borderColor: 'transparent', borderRadius: 8, borderWidth: 3, paddingHorizontal: 22, paddingVertical: 13, marginRight: 12, marginBottom: 12},
+  content: {alignItems: 'center', flexDirection: 'row'},
+  emphasized: {backgroundColor: colors.primaryDark},
   focused: {backgroundColor: colors.primary, borderColor: colors.focus, transform: [{scale: 1.05}]},
   disabled: {opacity: 0.45},
+  icon: {color: colors.muted, fontSize: 21, fontWeight: '800', marginRight: 9},
   label: {color: colors.text, fontSize: 18, fontWeight: '700'},
   focusedLabel: {color: colors.text},
 });

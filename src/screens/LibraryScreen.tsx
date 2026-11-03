@@ -153,6 +153,7 @@ export function LibraryScreen({ navigation }: Props) {
             />
           </View>
           <View>
+            <Text style={styles.eyebrow}>SUA BIBLIOTECA</Text>
             <Text style={styles.brand}>AppTV</Text>
             <Text style={styles.catalogCount}>
               {entries.length}{' '}
@@ -165,16 +166,23 @@ export function LibraryScreen({ navigation }: Props) {
         <View style={styles.actions}>
           <TVButton
             label={refreshing ? 'Atualizando' : 'Atualizar'}
+            icon="↻"
             onPress={refresh}
             disabled={refreshing}
+            style={styles.headerButton}
           />
           <TVButton
             label="Fonte"
+            icon="⌁"
             onPress={() => navigation.navigate('Setup')}
+            style={styles.headerButton}
           />
           <TVButton
-            label={updateAvailable ? `● ${versionLabel}` : versionLabel}
+            label={versionLabel}
+            icon={updateAvailable ? '●' : 'ⓘ'}
+            emphasized={updateAvailable}
             onPress={() => navigation.navigate('Update')}
+            style={styles.headerButtonLast}
           />
         </View>
       </View>
@@ -240,11 +248,15 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    borderBottomColor: colors.surfaceRaised,
+    backgroundColor: colors.surface,
+    borderColor: colors.surfaceRaised,
+    borderRadius: 18,
     borderBottomWidth: 1,
+    borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingBottom: 18,
+    paddingHorizontal: 22,
+    paddingVertical: 16,
   },
   identity: { alignItems: 'center', flexDirection: 'row' },
   brandMark: {
@@ -256,7 +268,36 @@ const styles = StyleSheet.create({
     width: 48,
   },
   brandLogo: { height: 48, width: 48 },
-  actions: { flexDirection: 'row' },
+  actions: {
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderColor: colors.surfaceRaised,
+    borderRadius: 13,
+    borderWidth: 1,
+    flexDirection: 'row',
+    padding: 6,
+  },
+  headerButton: {
+    borderRadius: 9,
+    marginBottom: 0,
+    marginRight: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  headerButtonLast: {
+    borderRadius: 9,
+    marginBottom: 0,
+    marginRight: 0,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  eyebrow: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2.2,
+    marginBottom: 2,
+  },
   brand: {
     color: colors.text,
     fontSize: 25,

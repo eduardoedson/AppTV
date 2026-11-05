@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CatalogItem } from '../domain/catalog';
 import { colors } from '../theme';
@@ -8,37 +8,46 @@ interface Props {
   item: CatalogItem;
   subtitle?: string;
   progressRatio?: number;
-  onPress: () => void;
-  hasTVPreferredFocus?: boolean;
+  onPress: (item: CatalogItem) => void;
+  onFocus?: (item: CatalogItem) => void;
 }
 
-export function PosterCard({
+function PosterCardComponent({
   item,
   subtitle,
   progressRatio,
   onPress,
-  hasTVPreferredFocus,
+  onFocus,
 }: Props) {
   const [focused, setFocused] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const posterUri = imageFailed ? undefined : item.poster;
   const showProgress = progressRatio !== undefined && progressRatio > 0;
+  const openItem = useCallback(() => onPress(item), [item, onPress]);
+  const focusItem = useCallback(() => {
+    setFocused(true);
+    onFocus?.(item);
+  }, [item, onFocus]);
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={item.title}
       accessibilityState={{ selected: focused }}
-      hasTVPreferredFocus={hasTVPreferredFocus}
-      onPress={onPress}
-      onFocus={() => setFocused(true)}
+      onPress={openItem}
+      onFocus={focusItem}
       onBlur={() => setFocused(false)}
-      style={styles.card}
+      style={[styles.card, focused && styles.cardFocused]}
     >
       <View style={[styles.frame, focused && styles.frameFocused]}>
         {posterUri ? (
           <Image
-            source={{ uri: posterUri }}
+            source={{
+              uri: posterUri,
+              cache: 'force-cache',
+              height: 249,
+              width: 180,
+            }}
             style={styles.poster}
             resizeMode="cover"
             resizeMethod="resize"
@@ -85,11 +94,19 @@ export function PosterCard({
   );
 }
 
+export const PosterCard = memo(PosterCardComponent);
+
 const styles = StyleSheet.create({
   card: {
+    height: 325,
     marginBottom: 26,
     marginRight: 14,
-    width: 194,
+    width: 180,
+  },
+  cardFocused: {
+    elevation: 14,
+    transform: [{ scale: 1.06 }],
+    zIndex: 10,
   },
   frame: {
     backgroundColor: colors.surface,
@@ -99,9 +116,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   frameFocused: {
-    borderColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: colors.primary,
+    borderColor: colors.accent,
+    borderWidth: 5,
+    elevation: 14,
+    shadowColor: colors.accent,
+    shadowOffset: { height: 0, width: 0 },
+    shadowOpacity: 0.95,
+    shadowRadius: 12,
   },
-  poster: { backgroundColor: colors.surface, height: 268, width: 194 },
+  poster: { backgroundColor: colors.surface, height: 249, width: 180 },
   placeholder: {
     alignItems: 'flex-start',
     backgroundColor: '#170C24',
@@ -198,6 +222,8 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 17,
     fontWeight: '800',
+    height: 42,
+    lineHeight: 20,
     marginTop: 11,
     paddingHorizontal: 3,
   },

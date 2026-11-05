@@ -2,8 +2,10 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
+  ListRenderItemInfo,
   StyleSheet,
   Text,
+  TVFocusGuideView,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -24,13 +26,32 @@ import { checkForUpdate, isUpdateConfigured } from '../services/appUpdate';
 type Props = NativeStackScreenProps<RootStackParamList, 'Library'>;
 
 const HORIZONTAL_PADDING = 124;
-const CARD_SLOT_WIDTH = 208;
+const CARD_SLOT_WIDTH = 194;
+const CARD_ROW_HEIGHT = 351;
 
 interface Entry {
   item: CatalogItem;
   subtitle?: string;
   ratio?: number;
   resume?: ResumeTarget;
+}
+
+function CatalogSkeleton({ columnCount }: { columnCount: number }) {
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.skeletonGrid}
+    >
+      {Array.from({ length: columnCount * 2 }, (_, index) => (
+        <View key={index} style={styles.skeletonCard}>
+          <View style={styles.skeletonPoster} />
+          <View style={styles.skeletonTitle} />
+          <View style={styles.skeletonSubtitle} />
+        </View>
+      ))}
+    </View>
+  );
 }
 
 const buildEntries = (
@@ -84,6 +105,7 @@ export function LibraryScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [versionLabel, setVersionLabel] = useState('Versão');
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
 
   // Show the installed version and check for a new one (cached for 30 minutes)
   useFocusEffect(
@@ -124,11 +146,47 @@ export function LibraryScreen({ navigation }: Props) {
     1,
     Math.floor((width - HORIZONTAL_PADDING) / CARD_SLOT_WIDTH),
   );
+  const entryIndexById = useMemo(
+    () => new Map(entries.map((entry, index) => [entry.item.id, index])),
+    [entries],
+  );
+  const focusedPosition = focusedItemId
+    ? (entryIndexById.get(focusedItemId) ?? 0) + 1
+    : 1;
 
   // Cards always open the details screen; playback starts from there
-  const open = (entry: Entry) => {
-    navigation.navigate('Details', { itemId: entry.item.id });
-  };
+  const open = useCallback(
+    (item: CatalogItem) => {
+      navigation.navigate('Details', { itemId: item.id });
+    },
+    [navigation],
+  );
+
+  const trackFocusedItem = useCallback((item: CatalogItem) => {
+    setFocusedItemId(item.id);
+  }, []);
+
+  const renderCard = useCallback(
+    ({ item: entry }: ListRenderItemInfo<Entry>) => (
+      <PosterCard
+        item={entry.item}
+        subtitle={entry.subtitle}
+        progressRatio={entry.ratio}
+        onPress={open}
+        onFocus={trackFocusedItem}
+      />
+    ),
+    [open, trackFocusedItem],
+  );
+
+  const getItemLayout = useCallback(
+    (_data: ArrayLike<Entry> | null | undefined, index: number) => ({
+      index,
+      length: CARD_ROW_HEIGHT,
+      offset: Math.floor(index / columnCount) * CARD_ROW_HEIGHT,
+    }),
+    [columnCount],
+  );
 
   const refresh = async () => {
     setRefreshing(true);
@@ -163,7 +221,12 @@ export function LibraryScreen({ navigation }: Props) {
             </Text>
           </View>
         </View>
-        <View style={styles.actions}>
+        <TVFocusGuideView
+          autoFocus
+          trapFocusLeft
+          trapFocusRight
+          style={styles.actions}
+        >
           <TVButton
             label={refreshing ? 'Atualizando' : 'Atualizar'}
             icon="↻"
@@ -184,33 +247,44 @@ export function LibraryScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('Update')}
             style={styles.headerButtonLast}
           />
-        </View>
+        </TVFocusGuideView>
       </View>
       {app.error ? <Text style={styles.notice}>{app.error}</Text> : null}
       {entries.length ? (
-        <FlatList
-          key={`catalog-${columnCount}`}
-          data={entries}
-          keyExtractor={entry => entry.item.id}
-          numColumns={columnCount}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.content}
-          columnWrapperStyle={styles.row}
-          initialNumToRender={Math.min(columnCount * 2, 8)}
-          maxToRenderPerBatch={4}
-          updateCellsBatchingPeriod={80}
-          windowSize={3}
-          removeClippedSubviews
-          renderItem={({ item: entry, index }) => (
-            <PosterCard
-              item={entry.item}
-              subtitle={entry.subtitle}
-              progressRatio={entry.ratio}
-              onPress={() => open(entry)}
-              hasTVPreferredFocus={index === 0}
-            />
+        <View style={styles.catalogArea}>
+          <View style={styles.positionIndicator}>
+            <Text style={styles.positionText}>
+              {focusedPosition} de {entries.length}
+            </Text>
+          </View>
+          {refreshing ? (
+            <CatalogSkeleton columnCount={columnCount} />
+          ) : (
+            <TVFocusGuideView
+              autoFocus
+              trapFocusLeft
+              trapFocusRight
+              style={styles.catalogFocusGuide}
+            >
+              <FlatList
+                key={`catalog-${columnCount}`}
+                data={entries}
+                keyExtractor={entry => entry.item.id}
+                numColumns={columnCount}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.content}
+                columnWrapperStyle={styles.row}
+                initialNumToRender={columnCount * 2}
+                maxToRenderPerBatch={columnCount}
+                updateCellsBatchingPeriod={80}
+                windowSize={3}
+                removeClippedSubviews
+                getItemLayout={getItemLayout}
+                renderItem={renderCard}
+              />
+            </TVFocusGuideView>
           )}
-        />
+        </View>
       ) : (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>
@@ -306,12 +380,64 @@ const styles = StyleSheet.create({
   },
   catalogCount: { color: colors.muted, fontSize: 14, marginTop: 2 },
   notice: { color: '#f3c969', fontSize: 16, marginVertical: 10 },
+  catalogArea: { flex: 1, position: 'relative' },
+  catalogFocusGuide: { flex: 1 },
+  positionIndicator: {
+    backgroundColor: 'rgba(23, 17, 32, 0.94)',
+    borderColor: colors.surfaceRaised,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    position: 'absolute',
+    right: 14,
+    top: 8,
+    zIndex: 20,
+  },
+  positionText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '800',
+  },
   content: {
     paddingBottom: 70,
     paddingHorizontal: 14,
     paddingTop: 38,
   },
   row: { justifyContent: 'flex-start' },
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 14,
+    paddingTop: 38,
+  },
+  skeletonCard: {
+    height: 325,
+    marginBottom: 26,
+    marginRight: 14,
+    opacity: 0.72,
+    width: 180,
+  },
+  skeletonPoster: {
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: 8,
+    height: 249,
+    width: 180,
+  },
+  skeletonTitle: {
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: 5,
+    height: 15,
+    marginTop: 13,
+    width: 148,
+  },
+  skeletonSubtitle: {
+    backgroundColor: colors.surface,
+    borderRadius: 4,
+    height: 10,
+    marginTop: 9,
+    width: 96,
+  },
   emptyState: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   emptyTitle: { color: colors.text, fontSize: 26, fontWeight: '800' },
   empty: { color: colors.muted, fontSize: 17, marginTop: 8 },

@@ -5,7 +5,6 @@ import {
   ListRenderItemInfo,
   StyleSheet,
   Text,
-  TVFocusGuideView,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -167,13 +166,14 @@ export function LibraryScreen({ navigation }: Props) {
   }, []);
 
   const renderCard = useCallback(
-    ({ item: entry }: ListRenderItemInfo<Entry>) => (
+    ({ item: entry, index }: ListRenderItemInfo<Entry>) => (
       <PosterCard
         item={entry.item}
         subtitle={entry.subtitle}
         progressRatio={entry.ratio}
         onPress={open}
         onFocus={trackFocusedItem}
+        hasTVPreferredFocus={index === 0}
       />
     ),
     [open, trackFocusedItem],
@@ -221,12 +221,7 @@ export function LibraryScreen({ navigation }: Props) {
             </Text>
           </View>
         </View>
-        <TVFocusGuideView
-          autoFocus
-          trapFocusLeft
-          trapFocusRight
-          style={styles.actions}
-        >
+        <View style={styles.actions}>
           <TVButton
             label={refreshing ? 'Atualizando' : 'Atualizar'}
             icon="↻"
@@ -247,7 +242,7 @@ export function LibraryScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('Update')}
             style={styles.headerButtonLast}
           />
-        </TVFocusGuideView>
+        </View>
       </View>
       {app.error ? <Text style={styles.notice}>{app.error}</Text> : null}
       {entries.length ? (
@@ -260,12 +255,7 @@ export function LibraryScreen({ navigation }: Props) {
           {refreshing ? (
             <CatalogSkeleton columnCount={columnCount} />
           ) : (
-            <TVFocusGuideView
-              autoFocus
-              trapFocusLeft
-              trapFocusRight
-              style={styles.catalogFocusGuide}
-            >
+            <View style={styles.catalogFocusGuide}>
               <FlatList
                 key={`catalog-${columnCount}`}
                 data={entries}
@@ -278,11 +268,11 @@ export function LibraryScreen({ navigation }: Props) {
                 maxToRenderPerBatch={columnCount}
                 updateCellsBatchingPeriod={80}
                 windowSize={3}
-                removeClippedSubviews
+                removeClippedSubviews={false}
                 getItemLayout={getItemLayout}
                 renderItem={renderCard}
               />
-            </TVFocusGuideView>
+            </View>
           )}
         </View>
       ) : (

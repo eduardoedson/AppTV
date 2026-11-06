@@ -10,6 +10,7 @@ interface Props {
   progressRatio?: number;
   onPress: (item: CatalogItem) => void;
   onFocus?: (item: CatalogItem) => void;
+  hasTVPreferredFocus?: boolean;
 }
 
 function PosterCardComponent({
@@ -18,6 +19,7 @@ function PosterCardComponent({
   progressRatio,
   onPress,
   onFocus,
+  hasTVPreferredFocus,
 }: Props) {
   const [focused, setFocused] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
@@ -34,6 +36,7 @@ function PosterCardComponent({
       accessibilityRole="button"
       accessibilityLabel={item.title}
       accessibilityState={{ selected: focused }}
+      hasTVPreferredFocus={hasTVPreferredFocus}
       onPress={openItem}
       onFocus={focusItem}
       onBlur={() => setFocused(false)}

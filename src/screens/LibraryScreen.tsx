@@ -223,6 +223,13 @@ export function LibraryScreen({ navigation }: Props) {
         </View>
         <View style={styles.actions}>
           <TVButton
+            label="TV"
+            icon="●"
+            emphasized
+            onPress={() => navigation.navigate('TV')}
+            style={styles.headerButton}
+          />
+          <TVButton
             label={refreshing ? 'Atualizando' : 'Atualizar'}
             icon="↻"
             onPress={refresh}

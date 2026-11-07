@@ -6,6 +6,7 @@ import {createRandomQueue, nextRandom, previousRandom, queueStartingAt, reconcil
 import {resolveResumeTarget} from '../src/playback/resume';
 import {buildPlayParams} from '../src/playback/launch';
 import {formatClock, formatDuration} from '../src/utils/format';
+import {createDailyTvSchedule, currentTvEntryIndex, tvDateKey} from '../src/domain/tvSchedule';
 
 const movie = {version: 1, items: [{id: 'm1', type: 'movie', title: 'Filme', sources: [{id: 'src', name: 'HD', url: 'https://cdn.example/video.mp4'}]}]};
 const insecureMovie = {...movie.items[0], id: 'm2', sources: [{id: 'src', name: 'HD', url: 'http://inseguro/video.mp4'}]};
@@ -121,6 +122,28 @@ test('formata tempos', () => {
   expect(formatClock(65_000)).toBe('1:05');
   expect(formatDuration(5400)).toBe('1 h 30 min');
   expect(formatDuration(undefined)).toBeNull();
+});
+
+test('cria programação diária determinística cobrindo exatamente 24 horas', () => {
+  const timestamp = new Date(2026, 10, 7, 12, 0, 0).getTime();
+  const catalog = validateCatalog({
+    version: 1,
+    items: [
+      {...movie.items[0], duration: 6 * 3600},
+      {...series, seasons: series.seasons.map(season => ({
+        ...season,
+        episodes: season.episodes.map(episode => ({...episode, duration: 6 * 3600})),
+      }))},
+    ],
+  }).catalog;
+  const first = createDailyTvSchedule(catalog, timestamp);
+  const second = createDailyTvSchedule(catalog, timestamp + 60_000);
+  expect(first.date).toBe(tvDateKey(timestamp));
+  expect(first.entries.map(entry => entry.contentId)).toEqual(second.entries.map(entry => entry.contentId));
+  expect(Date.parse(first.entries[0].startAt)).toBe(new Date(2026, 10, 7).getTime());
+  expect(Date.parse(first.entries.at(-1)!.endAt)).toBe(new Date(2026, 10, 8).getTime());
+  expect(new Set(first.entries.map(entry => `${entry.contentId}:${entry.episode?.id ?? ''}`)).size).toBe(first.entries.length);
+  expect(currentTvEntryIndex(first, timestamp)).toBeGreaterThanOrEqual(0);
 });
 
 test('resolve formatos públicos conhecidos do Drive', () => {

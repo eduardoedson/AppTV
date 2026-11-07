@@ -53,6 +53,7 @@ import {
 import { queueStartingAt, stepRandomQueue } from '../playback/randomQueue';
 import { PlayMode } from '../domain/playback';
 import { formatClock } from '../utils/format';
+import {currentTvEntryIndex, tvDateKey} from '../domain/tvSchedule';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
@@ -94,6 +95,7 @@ const resolveSource = (source: MediaSource): ResolvedSource => {
 
 export function PlayerScreen({ navigation, route }: Props) {
   const params = route.params;
+  const isLiveTV = Boolean(params.tvSchedule);
   const { contentId, source } = params;
   const episodeId = params.episode?.id ?? null;
   const sourceId = source.id;
@@ -119,6 +121,7 @@ export function PlayerScreen({ navigation, route }: Props) {
   // Private Drive videos need a fresh Google access token before the player starts
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(!resolved.needsAuth);
+  const [nowMs, setNowMs] = useState(Date.now());
 
   const catalogItem = useMemo(
     () => app.catalog?.items.find(item => item.id === contentId),
@@ -166,12 +169,12 @@ export function PlayerScreen({ navigation, route }: Props) {
   const showControls = useCallback(() => {
     setControls(true);
     clearHideTimer();
-    if (!errorRef.current)
+    if (!errorRef.current && !isLiveTV)
       hideTimer.current = setTimeout(
         () => setControls(false),
         CONTROLS_TIMEOUT_MS,
       );
-  }, [clearHideTimer, setControls]);
+  }, [clearHideTimer, isLiveTV, setControls]);
 
   const setError = useCallback(
     (message: string | null) => {
@@ -186,6 +189,7 @@ export function PlayerScreen({ navigation, route }: Props) {
   );
 
   const save = useCallback(() => {
+    if (isLiveTV) return;
     const duration = durationRef.current;
     if (duration <= 0) return;
     const position = Math.min(positionRef.current, duration);
@@ -198,7 +202,28 @@ export function PlayerScreen({ navigation, route }: Props) {
       completed: isCompleted(position, duration),
       updatedAt: Date.now(),
     });
-  }, [contentId, episodeId, sourceId]);
+  }, [contentId, episodeId, isLiveTV, sourceId]);
+
+  const openTvEntry = useCallback(
+    (index: number) => {
+      const schedule = params.tvSchedule;
+      const entry = schedule?.entries[index];
+      if (!schedule || !entry) {
+        navigation.replace('TV');
+        return;
+      }
+      navigation.replace('Player', {
+        contentId: entry.contentId,
+        title: entry.title,
+        episode: entry.episode,
+        source: entry.source,
+        startPositionMs: Math.max(0, Date.now() - Date.parse(entry.startAt)),
+        tvSchedule: schedule,
+        tvIndex: index,
+      });
+    },
+    [navigation, params.tvSchedule],
+  );
 
   const seekBy = useCallback(
     (seconds: number) => {
@@ -346,6 +371,24 @@ export function PlayerScreen({ navigation, route }: Props) {
     );
   }, [episodeId, isRandomMode, series]);
 
+  // Linear TV follows wall-clock time. It cannot be paused or shifted by the remote.
+  useEffect(() => {
+    if (!params.tvSchedule) return;
+    const sync = () => {
+      const timestamp = Date.now();
+      setNowMs(timestamp);
+      if (params.tvSchedule?.date !== tvDateKey(timestamp)) {
+        navigation.replace('TV');
+        return;
+      }
+      const expected = currentTvEntryIndex(params.tvSchedule, timestamp);
+      if (expected !== (params.tvIndex ?? 0)) openTvEntry(expected);
+    };
+    sync();
+    const timer = setInterval(sync, 1000);
+    return () => clearInterval(timer);
+  }, [navigation, openTvEntry, params.tvIndex, params.tvSchedule]);
+
   const switchSource = useCallback(
     (nextSource: MediaSource) => {
       save();
@@ -419,6 +462,7 @@ export function PlayerScreen({ navigation, route }: Props) {
   // Remote control handling.
   useEffect(() => {
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (isLiveTV) return false;
       if (controlsRef.current) {
         setControls(false);
         return true;
@@ -429,6 +473,8 @@ export function PlayerScreen({ navigation, route }: Props) {
       const type = event?.eventType;
       const action = event?.eventKeyAction;
       if (!type || type === 'focus' || type === 'blur') return;
+
+      if (isLiveTV) return;
 
       // Seeking reacts to key down so holding the key keeps seeking.
       if (type === 'fastForward' || type === 'rewind') {
@@ -465,15 +511,17 @@ export function PlayerScreen({ navigation, route }: Props) {
       back.remove();
       subscription?.remove();
     };
-  }, [seekBy, setControls, showControls, togglePause]);
+  }, [isLiveTV, seekBy, setControls, showControls, togglePause]);
 
   const onLoad = (data: OnLoadData) => {
     const duration = data.duration * 1000;
     durationRef.current = duration;
     setDurationMs(duration);
     setError(null);
-    const resume =
-      attempt > 0 && positionRef.current > 0
+    const liveEntry = params.tvSchedule?.entries[params.tvIndex ?? 0];
+    const resume = liveEntry
+      ? Math.max(0, Date.now() - Date.parse(liveEntry.startAt))
+      : attempt > 0 && positionRef.current > 0
         ? positionRef.current
         : params.startPositionMs !== undefined
         ? params.startPositionMs
@@ -493,8 +541,25 @@ export function PlayerScreen({ navigation, route }: Props) {
 
   const onEnd = () => {
     positionRef.current = durationRef.current;
+    if (isLiveTV) {
+      openTvEntry((params.tvIndex ?? 0) + 1);
+      return;
+    }
     if (!navigateQueue(1)) navigation.goBack();
   };
+
+  const liveEntry = params.tvSchedule?.entries[params.tvIndex ?? 0];
+  const liveNext = params.tvSchedule?.entries[(params.tvIndex ?? 0) + 1];
+  const liveStart = liveEntry ? Date.parse(liveEntry.startAt) : nowMs;
+  const liveEnd = liveEntry ? Date.parse(liveEntry.endAt) : nowMs;
+  const liveLabel = (entry: typeof liveEntry) =>
+    entry?.episode
+      ? `${entry.title} · T${entry.episode.seasonNumber} E${entry.episode.number} · ${entry.episode.title}`
+      : entry?.title ?? '';
+  const liveTime = (iso?: string) =>
+    iso
+      ? new Date(iso).toLocaleTimeString('pt-PT', {hour: '2-digit', minute: '2-digit'})
+      : '';
 
   return (
     <View style={styles.screen}>
@@ -505,7 +570,7 @@ export function PlayerScreen({ navigation, route }: Props) {
           source={{ uri: resolved.uri, headers: requestHeaders }}
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.CONTAIN}
-          paused={paused}
+          paused={isLiveTV ? false : paused}
           progressUpdateInterval={1000}
           onLoad={onLoad}
           onProgress={onProgress}
@@ -515,7 +580,23 @@ export function PlayerScreen({ navigation, route }: Props) {
           }
         />
       ) : null}
-      {controls ? (
+      {isLiveTV && liveEntry ? (
+        <View style={styles.liveHud} pointerEvents="none">
+          <View style={styles.liveHeader}>
+            <Text style={styles.liveBadge}>● AO VIVO</Text>
+            <Text style={styles.liveClock}>{liveTime(new Date(nowMs).toISOString())}</Text>
+          </View>
+          <Text style={styles.liveTitle}>{liveLabel(liveEntry)}</Text>
+          <Text style={styles.liveTiming}>
+            {liveTime(liveEntry.startAt)}–{liveTime(liveEntry.endAt)}  ·  passou {formatClock(nowMs - liveStart)}  ·  faltam {formatClock(liveEnd - nowMs)}
+          </Text>
+          {liveNext ? (
+            <Text style={styles.liveNext}>A seguir, {liveTime(liveNext.startAt)} · {liveLabel(liveNext)}</Text>
+          ) : null}
+          <ProgressBar ratio={(nowMs - liveStart) / Math.max(1, liveEnd - liveStart)} style={styles.liveProgress} />
+        </View>
+      ) : null}
+      {controls && !isLiveTV ? (
         <View style={styles.controlsScreen}>
           <AppHeader
             title="Reproduzindo"
@@ -668,4 +749,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 18,
   },
+  liveHud: {backgroundColor: 'rgba(0, 0, 0, 0.78)', bottom: 0, left: 0, paddingBottom: 24, paddingHorizontal: 48, paddingTop: 18, position: 'absolute', right: 0},
+  liveHeader: {alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between'},
+  liveBadge: {color: colors.accent, fontSize: 14, fontWeight: '900', letterSpacing: 1.4},
+  liveClock: {color: colors.text, fontSize: 18, fontWeight: '800'},
+  liveTitle: {color: colors.text, fontSize: 24, fontWeight: '900', marginTop: 8},
+  liveTiming: {color: colors.text, fontSize: 15, marginTop: 5},
+  liveNext: {color: colors.muted, fontSize: 15, marginTop: 6},
+  liveProgress: {height: 5, marginTop: 14},
 });

@@ -11,6 +11,7 @@ import {DetailsScreen} from './src/screens/DetailsScreen';
 import {RandomScreen} from './src/screens/RandomScreen';
 import {PlayerScreen} from './src/screens/PlayerScreen';
 import {UpdateScreen} from './src/screens/UpdateScreen';
+import {TVScreen} from './src/screens/TVScreen';
 import {colors} from './src/theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -18,7 +19,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 function Routes() {
   const app = useApp();
   if (!app.ready) return <View style={styles.loading}><ActivityIndicator color={colors.primary} size="large" /></View>;
-  return <NavigationContainer><Stack.Navigator initialRouteName={app.catalog || app.catalogUrl ? 'Library' : 'Setup'} screenOptions={{headerShown: false, animation: 'fade', contentStyle: {backgroundColor: colors.background}}}><Stack.Screen name="Setup" component={SetupScreen} /><Stack.Screen name="Library" component={LibraryScreen} /><Stack.Screen name="Details" component={DetailsScreen} /><Stack.Screen name="Random" component={RandomScreen} /><Stack.Screen name="Player" component={PlayerScreen} /><Stack.Screen name="Update" component={UpdateScreen} /></Stack.Navigator></NavigationContainer>;
+  return <NavigationContainer><Stack.Navigator initialRouteName={app.catalog || app.catalogUrl ? 'Library' : 'Setup'} screenOptions={{headerShown: false, animation: 'fade', contentStyle: {backgroundColor: colors.background}}}><Stack.Screen name="Setup" component={SetupScreen} /><Stack.Screen name="Library" component={LibraryScreen} /><Stack.Screen name="TV" component={TVScreen} /><Stack.Screen name="Details" component={DetailsScreen} /><Stack.Screen name="Random" component={RandomScreen} /><Stack.Screen name="Player" component={PlayerScreen} /><Stack.Screen name="Update" component={UpdateScreen} /></Stack.Navigator></NavigationContainer>;
 }
 
 export default function App() {

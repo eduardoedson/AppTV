@@ -58,6 +58,7 @@ import {currentTvEntryIndex, tvDateKey} from '../domain/tvSchedule';
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
 const CONTROLS_TIMEOUT_MS = 5000;
+const LIVE_SYNC_TOLERANCE_MS = 4000;
 const SAVE_INTERVAL_MS = 10_000;
 const SEEK_STEP_SECONDS = 10;
 const FAST_SEEK_STEP_SECONDS = 30;
@@ -111,6 +112,7 @@ export function PlayerScreen({ navigation, route }: Props) {
   const errorRef = useRef<string | null>(resolved.error);
   // Failure count handed to the next episode: grows on automatic skips, resets on normal navigation
   const nextFailuresRef = useRef(0);
+  const lastLiveSyncRef = useRef(0);
 
   const [paused, setPaused] = useState(false);
   const [controls, setControlsState] = useState(true);
@@ -169,12 +171,12 @@ export function PlayerScreen({ navigation, route }: Props) {
   const showControls = useCallback(() => {
     setControls(true);
     clearHideTimer();
-    if (!errorRef.current && !isLiveTV)
+    if (!errorRef.current)
       hideTimer.current = setTimeout(
         () => setControls(false),
         CONTROLS_TIMEOUT_MS,
       );
-  }, [clearHideTimer, isLiveTV, setControls]);
+  }, [clearHideTimer, setControls]);
 
   const setError = useCallback(
     (message: string | null) => {
@@ -474,7 +476,10 @@ export function PlayerScreen({ navigation, route }: Props) {
       const action = event?.eventKeyAction;
       if (!type || type === 'focus' || type === 'blur') return;
 
-      if (isLiveTV) return;
+      if (isLiveTV) {
+        if (action !== KEY_DOWN) showControls();
+        return;
+      }
 
       // Seeking reacts to key down so holding the key keeps seeking.
       if (type === 'fastForward' || type === 'rewind') {
@@ -528,6 +533,7 @@ export function PlayerScreen({ navigation, route }: Props) {
         : resumablePosition(progressRepository.getLatest(contentId, episodeId));
     if (resume > 0 && resume < duration) {
       video.current?.seek(resume / 1000);
+      lastLiveSyncRef.current = Date.now();
       positionRef.current = resume;
       setPositionMs(resume);
     }
@@ -535,6 +541,22 @@ export function PlayerScreen({ navigation, route }: Props) {
 
   const onProgress = (data: OnProgressData) => {
     const position = data.currentTime * 1000;
+    const liveEntry = params.tvSchedule?.entries[params.tvIndex ?? 0];
+    if (liveEntry && durationRef.current > 0) {
+      const target = Math.max(0, Date.now() - Date.parse(liveEntry.startAt));
+      const canSeek = target > 0 && target < durationRef.current;
+      if (
+        canSeek &&
+        Math.abs(position - target) > LIVE_SYNC_TOLERANCE_MS &&
+        Date.now() - lastLiveSyncRef.current > CONTROLS_TIMEOUT_MS
+      ) {
+        video.current?.seek(target / 1000);
+        lastLiveSyncRef.current = Date.now();
+        positionRef.current = target;
+        setPositionMs(target);
+        return;
+      }
+    }
     positionRef.current = position;
     setPositionMs(position);
   };
@@ -567,7 +589,11 @@ export function PlayerScreen({ navigation, route }: Props) {
         <Video
           key={`${sourceId}:${attempt}`}
           ref={video}
-          source={{ uri: resolved.uri, headers: requestHeaders }}
+          source={{
+            uri: resolved.uri,
+            headers: requestHeaders,
+            startPosition: isLiveTV ? params.startPositionMs : undefined,
+          }}
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.CONTAIN}
           paused={isLiveTV ? false : paused}
@@ -580,7 +606,7 @@ export function PlayerScreen({ navigation, route }: Props) {
           }
         />
       ) : null}
-      {isLiveTV && liveEntry ? (
+      {isLiveTV && liveEntry && controls ? (
         <View style={styles.liveHud} pointerEvents="none">
           <View style={styles.liveHeader}>
             <Text style={styles.liveBadge}>● AO VIVO</Text>

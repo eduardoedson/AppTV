@@ -202,6 +202,7 @@ export function LibraryScreen({ navigation }: Props) {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
+        <View style={styles.headerAccent} />
         <View style={styles.identity}>
           <View style={styles.brandMark}>
             <Image
@@ -221,17 +222,20 @@ export function LibraryScreen({ navigation }: Props) {
             </Text>
           </View>
         </View>
+        <View style={styles.headerDivider} />
         <View style={styles.actions}>
           <TVButton
-            label="TV"
+            label="Ao Vivo"
             icon="●"
             emphasized
+            compact
             onPress={() => navigation.navigate('TV')}
-            style={styles.headerButton}
+            style={[styles.headerButton, styles.liveButton]}
           />
           <TVButton
             label={refreshing ? 'Atualizando' : 'Atualizar'}
             icon="↻"
+            compact
             onPress={refresh}
             disabled={refreshing}
             style={styles.headerButton}
@@ -239,6 +243,7 @@ export function LibraryScreen({ navigation }: Props) {
           <TVButton
             label="Fonte"
             icon="⌁"
+            compact
             onPress={() => navigation.navigate('Setup')}
             style={styles.headerButton}
           />
@@ -246,6 +251,7 @@ export function LibraryScreen({ navigation }: Props) {
             label={versionLabel}
             icon={updateAvailable ? '●' : 'ⓘ'}
             emphasized={updateAvailable}
+            compact
             onPress={() => navigation.navigate('Update')}
             style={styles.headerButtonLast}
           />
@@ -315,67 +321,78 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     paddingHorizontal: 48,
-    paddingTop: 30,
+    paddingTop: 18,
   },
   header: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.surfaceRaised,
-    borderRadius: 18,
-    borderBottomWidth: 1,
+    backgroundColor: '#15101D',
+    borderColor: '#2B2038',
+    borderRadius: 16,
     borderWidth: 1,
+    elevation: 6,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 22,
-    paddingVertical: 16,
-  },
-  identity: { alignItems: 'center', flexDirection: 'row' },
-  brandMark: {
-    alignItems: 'center',
-    borderRadius: 12,
-    height: 48,
-    justifyContent: 'center',
-    marginRight: 14,
-    width: 48,
-  },
-  brandLogo: { height: 48, width: 48 },
-  actions: {
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderColor: colors.surfaceRaised,
-    borderRadius: 13,
-    borderWidth: 1,
-    flexDirection: 'row',
-    padding: 6,
-  },
-  headerButton: {
-    borderRadius: 9,
-    marginBottom: 0,
-    marginRight: 6,
+    minHeight: 72,
+    overflow: 'hidden',
     paddingHorizontal: 18,
     paddingVertical: 10,
+    position: 'relative',
+    shadowColor: '#000000',
+    shadowOffset: {width: 0, height: 5},
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
   },
+  headerAccent: {backgroundColor: colors.accent, bottom: 0, left: 0, position: 'absolute', top: 0, width: 3},
+  identity: { alignItems: 'center', flex: 1, flexDirection: 'row' },
+  brandMark: {
+    alignItems: 'center',
+    backgroundColor: '#21162D',
+    borderColor: '#38234A',
+    borderWidth: 1,
+    borderRadius: 10,
+    height: 44,
+    justifyContent: 'center',
+    marginRight: 12,
+    width: 44,
+  },
+  brandLogo: { height: 36, width: 36 },
+  headerDivider: {alignSelf: 'stretch', backgroundColor: '#30233D', marginHorizontal: 16, width: 1},
+  actions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  headerButton: {
+    backgroundColor: '#21192B',
+    borderColor: '#30243D',
+    borderRadius: 9,
+    marginBottom: 0,
+    marginRight: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  liveButton: {backgroundColor: '#5E20A9', borderColor: '#8E42DB'},
   headerButtonLast: {
+    backgroundColor: '#21192B',
+    borderColor: '#30243D',
     borderRadius: 9,
     marginBottom: 0,
     marginRight: 0,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   eyebrow: {
     color: colors.accent,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '900',
     letterSpacing: 2.2,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   brand: {
     color: colors.text,
-    fontSize: 25,
+    fontSize: 21,
     fontWeight: '900',
     letterSpacing: 1,
   },
-  catalogCount: { color: colors.muted, fontSize: 14, marginTop: 2 },
+  catalogCount: { color: colors.muted, fontSize: 12, marginTop: 1 },
   notice: { color: '#f3c969', fontSize: 16, marginVertical: 10 },
   catalogArea: { flex: 1, position: 'relative' },
   catalogFocusGuide: { flex: 1 },

@@ -8,9 +8,11 @@ import React, {
 import {
   AppState,
   BackHandler,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TVFocusGuideView,
   TVEventHandler,
   View,
 } from 'react-native';
@@ -130,6 +132,7 @@ export function PlayerScreen({ navigation, route }: Props) {
   const [authReady, setAuthReady] = useState(!resolved.needsAuth);
   const [nowMs, setNowMs] = useState(Date.now());
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [focusedScheduleId, setFocusedScheduleId] = useState<string | null>(null);
 
   const catalogItem = useMemo(
     () => app.catalog?.items.find(item => item.id === contentId),
@@ -612,7 +615,6 @@ export function PlayerScreen({ navigation, route }: Props) {
   const liveNext = params.tvSchedule?.entries[(params.tvIndex ?? 0) + 1];
   const visibleSchedule = params.tvSchedule?.entries.slice(
     params.tvIndex ?? 0,
-    (params.tvIndex ?? 0) + 7,
   ) ?? [];
   const liveStart = liveEntry ? Date.parse(liveEntry.startAt) : nowMs;
   const liveEnd = liveEntry ? Date.parse(liveEntry.endAt) : nowMs;
@@ -654,13 +656,20 @@ export function PlayerScreen({ navigation, route }: Props) {
               <Text style={styles.liveBadge}>● AO VIVO</Text>
               <Text style={styles.liveClock}>{liveTime(new Date(nowMs).toISOString())}</Text>
             </View>
-            <TVButton
-              label="Programação"
-              icon="☰"
-              onPress={openSchedule}
-              hasTVPreferredFocus
-              style={styles.scheduleButton}
-            />
+            <TVFocusGuideView
+              autoFocus
+              trapFocusDown
+              trapFocusLeft
+              trapFocusRight
+              trapFocusUp>
+              <TVButton
+                label="Programação"
+                icon="☰"
+                onPress={openSchedule}
+                hasTVPreferredFocus
+                style={styles.scheduleButton}
+              />
+            </TVFocusGuideView>
           </View>
           <Text style={styles.liveTitle}>{liveLabel(liveEntry)}</Text>
           <Text style={styles.liveTiming}>
@@ -673,7 +682,13 @@ export function PlayerScreen({ navigation, route }: Props) {
         </View>
       ) : null}
       {isLiveTV && scheduleOpen ? (
-        <View style={styles.schedulePanel}>
+        <TVFocusGuideView
+          autoFocus
+          trapFocusDown
+          trapFocusLeft
+          trapFocusRight
+          trapFocusUp
+          style={styles.schedulePanel}>
           <View style={styles.schedulePanelHeader}>
             <View>
               <Text style={styles.scheduleEyebrow}>CANAL APP TV</Text>
@@ -691,11 +706,18 @@ export function PlayerScreen({ navigation, route }: Props) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scheduleList}>
             {visibleSchedule.map((entry, index) => (
-              <View
+              <Pressable
                 key={entry.id}
+                accessibilityRole="text"
+                accessibilityLabel={`${liveTime(entry.startAt)}, ${liveLabel(entry)}`}
+                focusable
+                onFocus={() => setFocusedScheduleId(entry.id)}
+                onBlur={() => setFocusedScheduleId(current => current === entry.id ? null : current)}
+                onPress={() => undefined}
                 style={[
                   styles.scheduleEntry,
                   index === 0 && styles.scheduleEntryLive,
+                  focusedScheduleId === entry.id && styles.scheduleEntryFocused,
                 ]}>
                 <View style={styles.scheduleEntryTime}>
                   <Text style={styles.scheduleStart}>{liveTime(entry.startAt)}</Text>
@@ -711,10 +733,10 @@ export function PlayerScreen({ navigation, route }: Props) {
                     {index === 0 ? '● AGORA' : index === 1 ? 'A SEGUIR' : 'DEPOIS'}
                   </Text>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </ScrollView>
-        </View>
+        </TVFocusGuideView>
       ) : null}
       {controls && !isLiveTV ? (
         <View style={styles.controlsScreen}>
@@ -886,6 +908,7 @@ const styles = StyleSheet.create({
   scheduleList: {paddingBottom: 30, paddingTop: 22},
   scheduleEntry: {alignItems: 'center', backgroundColor: colors.surface, borderColor: 'transparent', borderRadius: 11, borderWidth: 2, flexDirection: 'row', marginBottom: 10, minHeight: 86, paddingHorizontal: 14, paddingVertical: 12},
   scheduleEntryLive: {backgroundColor: colors.surfaceRaised, borderColor: colors.accent},
+  scheduleEntryFocused: {backgroundColor: colors.primaryDark, borderColor: colors.focus, transform: [{scale: 1.02}]},
   scheduleEntryTime: {borderRightColor: colors.surfaceRaised, borderRightWidth: 1, marginRight: 14, width: 58},
   scheduleStart: {color: colors.text, fontSize: 17, fontWeight: '900'},
   scheduleEnd: {color: colors.muted, fontSize: 12, marginTop: 3},

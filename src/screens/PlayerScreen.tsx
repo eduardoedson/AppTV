@@ -8,6 +8,7 @@ import React, {
 import {
   AppState,
   BackHandler,
+  ScrollView,
   StyleSheet,
   Text,
   TVEventHandler,
@@ -53,7 +54,11 @@ import {
 import { queueStartingAt, stepRandomQueue } from '../playback/randomQueue';
 import { PlayMode } from '../domain/playback';
 import { formatClock } from '../utils/format';
-import {currentTvEntryIndex, tvDateKey} from '../domain/tvSchedule';
+import {
+  currentTvEntryIndex,
+  livePositionForDuration,
+  tvDateKey,
+} from '../domain/tvSchedule';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
@@ -124,6 +129,7 @@ export function PlayerScreen({ navigation, route }: Props) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(!resolved.needsAuth);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const catalogItem = useMemo(
     () => app.catalog?.items.find(item => item.id === contentId),
@@ -171,12 +177,27 @@ export function PlayerScreen({ navigation, route }: Props) {
   const showControls = useCallback(() => {
     setControls(true);
     clearHideTimer();
-    if (!errorRef.current)
+    if (!errorRef.current && !scheduleOpen)
       hideTimer.current = setTimeout(
         () => setControls(false),
         CONTROLS_TIMEOUT_MS,
       );
+  }, [clearHideTimer, scheduleOpen, setControls]);
+
+  const openSchedule = useCallback(() => {
+    clearHideTimer();
+    setControls(true);
+    setScheduleOpen(true);
   }, [clearHideTimer, setControls]);
+
+  const closeSchedule = useCallback(() => {
+    setScheduleOpen(false);
+    showControls();
+  }, [showControls]);
+
+  useEffect(() => {
+    if (scheduleOpen) clearHideTimer();
+  }, [clearHideTimer, scheduleOpen]);
 
   const setError = useCallback(
     (message: string | null) => {
@@ -464,7 +485,13 @@ export function PlayerScreen({ navigation, route }: Props) {
   // Remote control handling.
   useEffect(() => {
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (isLiveTV) return false;
+      if (isLiveTV) {
+        if (scheduleOpen) {
+          closeSchedule();
+          return true;
+        }
+        return false;
+      }
       if (controlsRef.current) {
         setControls(false);
         return true;
@@ -516,7 +543,7 @@ export function PlayerScreen({ navigation, route }: Props) {
       back.remove();
       subscription?.remove();
     };
-  }, [isLiveTV, seekBy, setControls, showControls, togglePause]);
+  }, [closeSchedule, isLiveTV, scheduleOpen, seekBy, setControls, showControls, togglePause]);
 
   const onLoad = (data: OnLoadData) => {
     const duration = data.duration * 1000;
@@ -525,7 +552,10 @@ export function PlayerScreen({ navigation, route }: Props) {
     setError(null);
     const liveEntry = params.tvSchedule?.entries[params.tvIndex ?? 0];
     const resume = liveEntry
-      ? Math.max(0, Date.now() - Date.parse(liveEntry.startAt))
+      ? livePositionForDuration(
+          Date.now() - Date.parse(liveEntry.startAt),
+          duration,
+        )
       : attempt > 0 && positionRef.current > 0
         ? positionRef.current
         : params.startPositionMs !== undefined
@@ -543,7 +573,10 @@ export function PlayerScreen({ navigation, route }: Props) {
     const position = data.currentTime * 1000;
     const liveEntry = params.tvSchedule?.entries[params.tvIndex ?? 0];
     if (liveEntry && durationRef.current > 0) {
-      const target = Math.max(0, Date.now() - Date.parse(liveEntry.startAt));
+      const target = livePositionForDuration(
+        Date.now() - Date.parse(liveEntry.startAt),
+        durationRef.current,
+      );
       const canSeek = target > 0 && target < durationRef.current;
       if (
         canSeek &&
@@ -564,7 +597,12 @@ export function PlayerScreen({ navigation, route }: Props) {
   const onEnd = () => {
     positionRef.current = durationRef.current;
     if (isLiveTV) {
-      openTvEntry((params.tvIndex ?? 0) + 1);
+      // An estimated schedule slot can be longer than the actual file. Repeat
+      // it until the wall-clock schedule advances instead of bouncing between
+      // two entries without ever starting playback.
+      video.current?.seek(0);
+      positionRef.current = 0;
+      setPositionMs(0);
       return;
     }
     if (!navigateQueue(1)) navigation.goBack();
@@ -572,6 +610,10 @@ export function PlayerScreen({ navigation, route }: Props) {
 
   const liveEntry = params.tvSchedule?.entries[params.tvIndex ?? 0];
   const liveNext = params.tvSchedule?.entries[(params.tvIndex ?? 0) + 1];
+  const visibleSchedule = params.tvSchedule?.entries.slice(
+    params.tvIndex ?? 0,
+    (params.tvIndex ?? 0) + 7,
+  ) ?? [];
   const liveStart = liveEntry ? Date.parse(liveEntry.startAt) : nowMs;
   const liveEnd = liveEntry ? Date.parse(liveEntry.endAt) : nowMs;
   const liveLabel = (entry: typeof liveEntry) =>
@@ -592,7 +634,6 @@ export function PlayerScreen({ navigation, route }: Props) {
           source={{
             uri: resolved.uri,
             headers: requestHeaders,
-            startPosition: isLiveTV ? params.startPositionMs : undefined,
           }}
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.CONTAIN}
@@ -607,10 +648,19 @@ export function PlayerScreen({ navigation, route }: Props) {
         />
       ) : null}
       {isLiveTV && liveEntry && controls ? (
-        <View style={styles.liveHud} pointerEvents="none">
+        <View style={styles.liveHud}>
           <View style={styles.liveHeader}>
-            <Text style={styles.liveBadge}>● AO VIVO</Text>
-            <Text style={styles.liveClock}>{liveTime(new Date(nowMs).toISOString())}</Text>
+            <View>
+              <Text style={styles.liveBadge}>● AO VIVO</Text>
+              <Text style={styles.liveClock}>{liveTime(new Date(nowMs).toISOString())}</Text>
+            </View>
+            <TVButton
+              label="Programação"
+              icon="☰"
+              onPress={openSchedule}
+              hasTVPreferredFocus
+              style={styles.scheduleButton}
+            />
           </View>
           <Text style={styles.liveTitle}>{liveLabel(liveEntry)}</Text>
           <Text style={styles.liveTiming}>
@@ -620,6 +670,50 @@ export function PlayerScreen({ navigation, route }: Props) {
             <Text style={styles.liveNext}>A seguir, {liveTime(liveNext.startAt)} · {liveLabel(liveNext)}</Text>
           ) : null}
           <ProgressBar ratio={(nowMs - liveStart) / Math.max(1, liveEnd - liveStart)} style={styles.liveProgress} />
+        </View>
+      ) : null}
+      {isLiveTV && scheduleOpen ? (
+        <View style={styles.schedulePanel}>
+          <View style={styles.schedulePanelHeader}>
+            <View>
+              <Text style={styles.scheduleEyebrow}>CANAL APP TV</Text>
+              <Text style={styles.scheduleTitle}>Programação</Text>
+            </View>
+            <TVButton
+              label="Fechar"
+              icon="×"
+              onPress={closeSchedule}
+              hasTVPreferredFocus
+              style={styles.scheduleClose}
+            />
+          </View>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scheduleList}>
+            {visibleSchedule.map((entry, index) => (
+              <View
+                key={entry.id}
+                style={[
+                  styles.scheduleEntry,
+                  index === 0 && styles.scheduleEntryLive,
+                ]}>
+                <View style={styles.scheduleEntryTime}>
+                  <Text style={styles.scheduleStart}>{liveTime(entry.startAt)}</Text>
+                  <Text style={styles.scheduleEnd}>{liveTime(entry.endAt)}</Text>
+                </View>
+                <View style={styles.scheduleEntryInfo}>
+                  <Text
+                    style={styles.scheduleEntryTitle}
+                    numberOfLines={2}>
+                    {liveLabel(entry)}
+                  </Text>
+                  <Text style={index === 0 ? styles.scheduleNow : styles.scheduleNextLabel}>
+                    {index === 0 ? '● AGORA' : index === 1 ? 'A SEGUIR' : 'DEPOIS'}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
         </View>
       ) : null}
       {controls && !isLiveTV ? (
@@ -776,11 +870,27 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   liveHud: {backgroundColor: 'rgba(0, 0, 0, 0.78)', bottom: 0, left: 0, paddingBottom: 24, paddingHorizontal: 48, paddingTop: 18, position: 'absolute', right: 0},
-  liveHeader: {alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between'},
+  liveHeader: {alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between'},
   liveBadge: {color: colors.accent, fontSize: 14, fontWeight: '900', letterSpacing: 1.4},
   liveClock: {color: colors.text, fontSize: 18, fontWeight: '800'},
+  scheduleButton: {marginBottom: 0},
   liveTitle: {color: colors.text, fontSize: 24, fontWeight: '900', marginTop: 8},
   liveTiming: {color: colors.text, fontSize: 15, marginTop: 5},
   liveNext: {color: colors.muted, fontSize: 15, marginTop: 6},
   liveProgress: {height: 5, marginTop: 14},
+  schedulePanel: {backgroundColor: 'rgba(11, 7, 18, 0.97)', borderLeftColor: colors.primary, borderLeftWidth: 3, bottom: 0, paddingHorizontal: 24, paddingTop: 24, position: 'absolute', right: 0, top: 0, width: 470, zIndex: 20},
+  schedulePanelHeader: {alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between'},
+  scheduleEyebrow: {color: colors.accent, fontSize: 12, fontWeight: '900', letterSpacing: 1.5},
+  scheduleTitle: {color: colors.text, fontSize: 28, fontWeight: '900', marginTop: 4},
+  scheduleClose: {marginBottom: 0, marginRight: 0, paddingHorizontal: 15, paddingVertical: 9},
+  scheduleList: {paddingBottom: 30, paddingTop: 22},
+  scheduleEntry: {alignItems: 'center', backgroundColor: colors.surface, borderColor: 'transparent', borderRadius: 11, borderWidth: 2, flexDirection: 'row', marginBottom: 10, minHeight: 86, paddingHorizontal: 14, paddingVertical: 12},
+  scheduleEntryLive: {backgroundColor: colors.surfaceRaised, borderColor: colors.accent},
+  scheduleEntryTime: {borderRightColor: colors.surfaceRaised, borderRightWidth: 1, marginRight: 14, width: 58},
+  scheduleStart: {color: colors.text, fontSize: 17, fontWeight: '900'},
+  scheduleEnd: {color: colors.muted, fontSize: 12, marginTop: 3},
+  scheduleEntryInfo: {flex: 1},
+  scheduleEntryTitle: {color: colors.text, fontSize: 16, fontWeight: '800', lineHeight: 21},
+  scheduleNow: {color: colors.accent, fontSize: 11, fontWeight: '900', marginTop: 6},
+  scheduleNextLabel: {color: colors.muted, fontSize: 11, fontWeight: '900', marginTop: 6},
 });

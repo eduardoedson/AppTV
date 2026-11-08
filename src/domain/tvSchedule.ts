@@ -20,12 +20,22 @@ export interface TvScheduleEntry {
 }
 
 export interface TvSchedule {
-  version: 1;
+  version: 2;
   date: string;
   generatedAt: string;
   catalogSignature: string;
   entries: TvScheduleEntry[];
 }
+
+// Schedule entries may use an estimated duration. Keep the live offset inside
+// the real media duration so the player never starts past the end of a file.
+export const livePositionForDuration = (
+  elapsedMs: number,
+  durationMs: number,
+): number => {
+  if (durationMs <= 0) return 0;
+  return Math.max(0, elapsedMs) % durationMs;
+};
 
 interface Candidate {
   contentId: string;
@@ -36,8 +46,10 @@ interface Candidate {
   estimatedDuration: boolean;
 }
 
-const MOVIE_FALLBACK_SECONDS = 2 * 60 * 60;
-const EPISODE_FALLBACK_SECONDS = 45 * 60;
+// Used only when the catalog omits duration. Most TV episodes are produced for
+// a 30-minute slot and contain roughly 22 minutes of actual video.
+const MOVIE_FALLBACK_SECONDS = 100 * 60;
+const EPISODE_FALLBACK_SECONDS = 22 * 60;
 
 const localDateKey = (date: Date): string => {
   const year = date.getFullYear();
@@ -120,18 +132,9 @@ export const createDailyTvSchedule = (
 
   const random = seededRandom(hash(`${date}:${signature}`));
   const {startMs, endMs} = tvDayBounds(timestamp);
-  const requiredSeconds = Math.ceil((endMs - startMs) / 1000);
-  const availableSeconds = pool.reduce(
-    (total, candidate) => total + candidate.durationSeconds,
-    0,
-  );
-  if (availableSeconds < requiredSeconds)
-    throw new Error(
-      'A biblioteca não possui 24 horas de conteúdo único para montar a programação sem repetições.',
-    );
-
   // Movies and episodes share one pool. A seeded Fisher-Yates shuffle makes the
-  // order stable for the whole day while consuming every item at most once.
+  // order stable for the whole day. Smaller libraries repeat after every full
+  // pass so the channel can always provide a complete 24-hour schedule.
   const shuffled = [...pool];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const target = Math.floor(random() * (index + 1));
@@ -142,7 +145,7 @@ export const createDailyTvSchedule = (
   let poolIndex = 0;
 
   while (cursor < endMs) {
-    const candidate = shuffled[poolIndex];
+    const candidate = shuffled[poolIndex % shuffled.length];
     poolIndex += 1;
     const scheduledSeconds = Math.min(
       candidate.durationSeconds,
@@ -160,7 +163,7 @@ export const createDailyTvSchedule = (
   }
 
   return {
-    version: 1,
+    version: 2,
     date,
     generatedAt: new Date(timestamp).toISOString(),
     catalogSignature: signature,
@@ -186,7 +189,7 @@ export const isCurrentTvSchedule = (
 ): schedule is TvSchedule =>
   Boolean(
     schedule &&
-      schedule.version === 1 &&
+      schedule.version === 2 &&
       schedule.date === tvDateKey(timestamp) &&
       schedule.catalogSignature === catalogSignature(catalog) &&
       schedule.entries.length,

@@ -31,7 +31,7 @@ const entryLabel = (entry: TvScheduleEntry) =>
     ? `${entry.title} · T${entry.episode.seasonNumber} E${entry.episode.number} · ${entry.episode.title}`
     : entry.title;
 
-export function TVScreen({navigation}: Props) {
+export function TVScreen({navigation, route}: Props) {
   const {catalog} = useApp();
   const [schedule, setSchedule] = useState<TvSchedule | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -47,10 +47,24 @@ export function TVScreen({navigation}: Props) {
       if (next !== saved) await settings.setTvSchedule(next);
       setSchedule(next);
       setError(null);
+      if (!route.params?.showSchedule) {
+        const timestamp = Date.now();
+        const index = currentTvEntryIndex(next, timestamp);
+        const entry = next.entries[index];
+        navigation.replace('Player', {
+          contentId: entry.contentId,
+          title: entry.title,
+          episode: entry.episode,
+          source: entry.source,
+          startPositionMs: Math.max(0, timestamp - Date.parse(entry.startAt)),
+          tvSchedule: next,
+          tvIndex: index,
+        });
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Falha ao criar a programação.');
     }
-  }, [catalog]);
+  }, [catalog, navigation, route.params?.showSchedule]);
 
   useFocusEffect(useCallback(() => {
     loadSchedule();

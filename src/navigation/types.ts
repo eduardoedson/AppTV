@@ -20,7 +20,7 @@ export type PlayerParams = {
 export type RootStackParamList = {
   Setup: undefined;
   Library: undefined;
-  TV: undefined;
+  TV: {showSchedule?: boolean} | undefined;
   Details: {itemId: string};
   Random: {seriesId: string};
   Player: PlayerParams;

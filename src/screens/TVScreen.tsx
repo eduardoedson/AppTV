@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {FlatList, ListRenderItemInfo, StyleSheet, Text, View} from 'react-native';
+import {FlatList, ListRenderItemInfo, Pressable, StyleSheet, Text, View} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useFocusEffect} from '@react-navigation/native';
 import {RootStackParamList} from '../navigation/types';
@@ -11,6 +11,7 @@ import {
   createDailyTvSchedule,
   currentTvEntryIndex,
   isCurrentTvSchedule,
+  promoteTvScheduleEntry,
   TvSchedule,
   TvScheduleEntry,
   tvDateKey,
@@ -97,11 +98,34 @@ export function TVScreen({navigation, route}: Props) {
     });
   };
 
+  const selectFutureEntry = useCallback(async (index: number) => {
+    if (!schedule || !catalog || index <= currentIndex) return;
+    try {
+      const timestamp = Date.now();
+      const nextSchedule = promoteTvScheduleEntry(schedule, catalog, index, timestamp);
+      await settings.setTvSchedule(nextSchedule);
+      setNow(timestamp);
+      setSchedule(nextSchedule);
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Falha ao alterar a programação.');
+    }
+  }, [catalog, currentIndex, schedule]);
+
   const renderEntry = useCallback(
     ({item, index}: ListRenderItemInfo<TvScheduleEntry>) => {
       const live = index === currentIndex;
       return (
-        <View style={[styles.program, live && styles.programLive]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${clockTime(item.startAt)}, ${entryLabel(item)}`}
+          disabled={index <= currentIndex}
+          onPress={() => selectFutureEntry(index)}
+          style={({focused}) => [
+            styles.program,
+            live && styles.programLive,
+            focused && styles.programFocused,
+          ]}>
           <View style={styles.programTime}>
             <Text style={[styles.time, live && styles.liveText]}>{clockTime(item.startAt)}</Text>
             <Text style={styles.endTime}>{clockTime(item.endAt)}</Text>
@@ -113,10 +137,10 @@ export function TVScreen({navigation, route}: Props) {
               {item.estimatedDuration ? '  ·  duração estimada' : ''}
             </Text>
           </View>
-        </View>
+        </Pressable>
       );
     },
-    [currentIndex],
+    [currentIndex, selectFutureEntry],
   );
 
   const dateLabel = useMemo(
@@ -175,6 +199,7 @@ const styles = StyleSheet.create({
   list: {paddingBottom: 60, paddingTop: 18},
   program: {alignItems: 'center', backgroundColor: colors.surface, borderColor: 'transparent', borderRadius: 12, borderWidth: 2, flexDirection: 'row', height: 76, marginBottom: 8, paddingHorizontal: 18},
   programLive: {backgroundColor: colors.surfaceRaised, borderColor: colors.accent},
+  programFocused: {backgroundColor: colors.primaryDark, borderColor: colors.focus, transform: [{scale: 1.015}]},
   programTime: {borderRightColor: colors.surfaceRaised, borderRightWidth: 1, marginRight: 20, width: 82},
   time: {color: colors.text, fontSize: 19, fontWeight: '900'},
   endTime: {color: colors.muted, fontSize: 13, marginTop: 2},

@@ -121,6 +121,81 @@ const candidatesFor = (catalog: Catalog): Candidate[] =>
     });
   });
 
+const shuffle = <T>(values: T[], random: () => number): T[] => {
+  const result = [...values];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(random() * (index + 1));
+    [result[index], result[target]] = [result[target], result[index]];
+  }
+  return result;
+};
+
+// Pick titles in balanced rounds. Episodes are shuffled independently inside
+// each series, so a series with hundreds of episodes does not crowd out a
+// movie or a shorter series.
+const balancedCandidates = (
+  pool: Candidate[],
+  random: () => number,
+  initialCounts: Map<string, number> = new Map(),
+) => {
+  const groups = new Map<string, Candidate[]>();
+  pool.forEach(candidate => {
+    const group = groups.get(candidate.contentId) ?? [];
+    group.push(candidate);
+    groups.set(candidate.contentId, group);
+  });
+  const queues = new Map<string, Candidate[]>();
+  const counts = new Map(
+    [...groups.keys()].map(id => [id, initialCounts.get(id) ?? 0]),
+  );
+
+  return (): Candidate => {
+    const leastUsed = Math.min(...counts.values());
+    const eligible = shuffle(
+      [...groups.keys()].filter(id => counts.get(id) === leastUsed),
+      random,
+    );
+    const contentId = eligible[0];
+    let queue = queues.get(contentId) ?? [];
+    if (!queue.length) queue = shuffle(groups.get(contentId)!, random);
+    const candidate = queue.shift()!;
+    queues.set(contentId, queue);
+    counts.set(contentId, (counts.get(contentId) ?? 0) + 1);
+    return candidate;
+  };
+};
+
+const fillSchedule = (
+  pool: Candidate[],
+  random: () => number,
+  date: string,
+  startMs: number,
+  endMs: number,
+  startNumber = 1,
+  initialCounts: Map<string, number> = new Map(),
+): TvScheduleEntry[] => {
+  const pickNext = balancedCandidates(pool, random, initialCounts);
+  const entries: TvScheduleEntry[] = [];
+  let cursor = startMs;
+  while (cursor < endMs) {
+    const candidate = pickNext();
+    const scheduledSeconds = Math.min(
+      candidate.durationSeconds,
+      Math.ceil((endMs - cursor) / 1000),
+    );
+    const next = cursor + scheduledSeconds * 1000;
+    entries.push({
+      ...candidate,
+      id: `${date}-${String(startNumber + entries.length).padStart(3, '0')}`,
+      startAt: new Date(cursor).toISOString(),
+      endAt: new Date(next).toISOString(),
+      durationSeconds: scheduledSeconds,
+    });
+    cursor = next;
+  }
+  return entries;
+};
+
 export const createDailyTvSchedule = (
   catalog: Catalog,
   timestamp = Date.now(),
@@ -132,35 +207,7 @@ export const createDailyTvSchedule = (
 
   const random = seededRandom(hash(`${date}:${signature}`));
   const {startMs, endMs} = tvDayBounds(timestamp);
-  // Movies and episodes share one pool. A seeded Fisher-Yates shuffle makes the
-  // order stable for the whole day. Smaller libraries repeat after every full
-  // pass so the channel can always provide a complete 24-hour schedule.
-  const shuffled = [...pool];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const target = Math.floor(random() * (index + 1));
-    [shuffled[index], shuffled[target]] = [shuffled[target], shuffled[index]];
-  }
-  const entries: TvScheduleEntry[] = [];
-  let cursor = startMs;
-  let poolIndex = 0;
-
-  while (cursor < endMs) {
-    const candidate = shuffled[poolIndex % shuffled.length];
-    poolIndex += 1;
-    const scheduledSeconds = Math.min(
-      candidate.durationSeconds,
-      Math.ceil((endMs - cursor) / 1000),
-    );
-    const next = cursor + scheduledSeconds * 1000;
-    entries.push({
-      ...candidate,
-      id: `${date}-${String(entries.length + 1).padStart(3, '0')}`,
-      startAt: new Date(cursor).toISOString(),
-      endAt: new Date(next).toISOString(),
-      durationSeconds: scheduledSeconds,
-    });
-    cursor = next;
-  }
+  const entries = fillSchedule(pool, random, date, startMs, endMs);
 
   return {
     version: 2,
@@ -168,6 +215,49 @@ export const createDailyTvSchedule = (
     generatedAt: new Date(timestamp).toISOString(),
     catalogSignature: signature,
     entries,
+  };
+};
+
+export const promoteTvScheduleEntry = (
+  schedule: TvSchedule,
+  catalog: Catalog,
+  selectedIndex: number,
+  timestamp = Date.now(),
+): TvSchedule => {
+  const currentIndex = currentTvEntryIndex(schedule, timestamp);
+  const selected = schedule.entries[selectedIndex];
+  if (!selected || selectedIndex <= currentIndex) return schedule;
+
+  const pool = candidatesFor(catalog);
+  const {endMs} = tvDayBounds(timestamp);
+  const counts = new Map<string, number>();
+  counts.set(selected.contentId, 1);
+
+  const selectedDuration = Math.min(
+    selected.durationSeconds,
+    Math.ceil((endMs - timestamp) / 1000),
+  );
+  const promoted: TvScheduleEntry = {
+    ...selected,
+    id: `${schedule.date}-001`,
+    startAt: new Date(timestamp).toISOString(),
+    endAt: new Date(timestamp + selectedDuration * 1000).toISOString(),
+    durationSeconds: selectedDuration,
+  };
+  const random = seededRandom(hash(`${schedule.date}:${timestamp}:${selected.id}`));
+  const rest = fillSchedule(
+    pool,
+    random,
+    schedule.date,
+    Date.parse(promoted.endAt),
+    endMs,
+    2,
+    counts,
+  );
+  return {
+    ...schedule,
+    generatedAt: new Date(timestamp).toISOString(),
+    entries: [promoted, ...rest],
   };
 };
 

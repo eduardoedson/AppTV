@@ -6,7 +6,7 @@ import {createRandomQueue, nextRandom, previousRandom, queueStartingAt, reconcil
 import {resolveResumeTarget} from '../src/playback/resume';
 import {buildPlayParams} from '../src/playback/launch';
 import {formatClock, formatDuration} from '../src/utils/format';
-import {createDailyTvSchedule, currentTvEntryIndex, tvDateKey} from '../src/domain/tvSchedule';
+import {createDailyTvSchedule, currentTvEntryIndex, promoteTvScheduleEntry, tvDateKey} from '../src/domain/tvSchedule';
 
 const movie = {version: 1, items: [{id: 'm1', type: 'movie', title: 'Filme', sources: [{id: 'src', name: 'HD', url: 'https://cdn.example/video.mp4'}]}]};
 const insecureMovie = {...movie.items[0], id: 'm2', sources: [{id: 'src', name: 'HD', url: 'http://inseguro/video.mp4'}]};
@@ -142,8 +142,45 @@ test('cria programação diária determinística cobrindo exatamente 24 horas', 
   expect(first.entries.map(entry => entry.contentId)).toEqual(second.entries.map(entry => entry.contentId));
   expect(Date.parse(first.entries[0].startAt)).toBe(new Date(2026, 10, 7).getTime());
   expect(Date.parse(first.entries.at(-1)!.endAt)).toBe(new Date(2026, 10, 8).getTime());
-  expect(new Set(first.entries.map(entry => `${entry.contentId}:${entry.episode?.id ?? ''}`)).size).toBe(first.entries.length);
+  const counts = first.entries.reduce<Record<string, number>>((result, entry) => {
+    result[entry.contentId] = (result[entry.contentId] ?? 0) + 1;
+    return result;
+  }, {});
+  expect(Math.max(...Object.values(counts)) - Math.min(...Object.values(counts))).toBeLessThanOrEqual(1);
+  expect(new Set(first.entries.filter(entry => entry.episode).map(entry => entry.episode!.id)).size)
+    .toBe(first.entries.filter(entry => entry.episode).length);
   expect(currentTvEntryIndex(first, timestamp)).toBeGreaterThanOrEqual(0);
+});
+
+test('promove um programa futuro e recria a programação seguinte', () => {
+  const timestamp = new Date(2026, 10, 7, 12, 0, 0).getTime();
+  const catalog = validateCatalog({
+    version: 1,
+    items: [
+      {...movie.items[0], duration: 30 * 60},
+      {...series, seasons: series.seasons.map(season => ({
+        ...season,
+        episodes: season.episodes.map(episode => ({...episode, duration: 30 * 60})),
+      }))},
+    ],
+  }).catalog;
+  const schedule = createDailyTvSchedule(catalog, timestamp);
+  const oldCurrent = currentTvEntryIndex(schedule, timestamp);
+  const selectedIndex = oldCurrent + 3;
+  const selected = schedule.entries[selectedIndex];
+  const promoted = promoteTvScheduleEntry(schedule, catalog, selectedIndex, timestamp);
+  const newCurrent = currentTvEntryIndex(promoted, timestamp);
+
+  expect(newCurrent).toBe(0);
+  expect(promoted.entries[0].id).toBe(`${promoted.date}-001`);
+  expect(promoted.entries[newCurrent]).toMatchObject({
+    contentId: selected.contentId,
+    startAt: new Date(timestamp).toISOString(),
+  });
+  expect(promoted.entries[newCurrent].episode?.id).toBe(selected.episode?.id);
+  expect(promoted.entries.slice(newCurrent + 1).map(entry => `${entry.contentId}:${entry.episode?.id ?? ''}`))
+    .not.toEqual(schedule.entries.slice(oldCurrent + 1).map(entry => `${entry.contentId}:${entry.episode?.id ?? ''}`));
+  expect(Date.parse(promoted.entries.at(-1)!.endAt)).toBe(new Date(2026, 10, 8).getTime());
 });
 
 test('resolve formatos públicos conhecidos do Drive', () => {

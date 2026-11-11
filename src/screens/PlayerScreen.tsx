@@ -59,8 +59,10 @@ import { formatClock } from '../utils/format';
 import {
   currentTvEntryIndex,
   livePositionForDuration,
+  refreshTvScheduleAfterCurrent,
   tvDateKey,
 } from '../domain/tvSchedule';
+import { settings } from '../storage/settings';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
@@ -250,6 +252,35 @@ export function PlayerScreen({ navigation, route }: Props) {
     },
     [navigation, params.tvSchedule],
   );
+
+  const refreshLiveSchedule = useCallback(async () => {
+    if (!params.tvSchedule || !app.catalog) return;
+    const timestamp = Date.now();
+    const nextSchedule = refreshTvScheduleAfterCurrent(
+      params.tvSchedule,
+      app.catalog,
+      timestamp,
+    );
+    try {
+      await settings.setTvSchedule(nextSchedule);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'A programação foi atualizada, mas não foi possível guardá-la.',
+      );
+    }
+    const entry = nextSchedule.entries[0];
+    navigation.replace('Player', {
+      contentId: entry.contentId,
+      title: entry.title,
+      episode: entry.episode,
+      source: entry.source,
+      startPositionMs: Math.max(0, timestamp - Date.parse(entry.startAt)),
+      tvSchedule: nextSchedule,
+      tvIndex: 0,
+    });
+  }, [app.catalog, navigation, params.tvSchedule, setError]);
 
   const seekBy = useCallback(
     (seconds: number) => {
@@ -694,13 +725,21 @@ export function PlayerScreen({ navigation, route }: Props) {
               <Text style={styles.scheduleEyebrow}>CANAL APP TV</Text>
               <Text style={styles.scheduleTitle}>Programação</Text>
             </View>
-            <TVButton
-              label="Fechar"
-              icon="×"
-              onPress={closeSchedule}
-              hasTVPreferredFocus
-              style={styles.scheduleClose}
-            />
+            <View style={styles.scheduleActions}>
+              <TVButton
+                label="Atualizar"
+                icon="↻"
+                onPress={refreshLiveSchedule}
+                style={styles.scheduleAction}
+              />
+              <TVButton
+                label="Fechar"
+                icon="×"
+                onPress={closeSchedule}
+                hasTVPreferredFocus
+                style={styles.scheduleAction}
+              />
+            </View>
           </View>
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -904,7 +943,8 @@ const styles = StyleSheet.create({
   schedulePanelHeader: {alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between'},
   scheduleEyebrow: {color: colors.accent, fontSize: 12, fontWeight: '900', letterSpacing: 1.5},
   scheduleTitle: {color: colors.text, fontSize: 28, fontWeight: '900', marginTop: 4},
-  scheduleClose: {marginBottom: 0, marginRight: 0, paddingHorizontal: 15, paddingVertical: 9},
+  scheduleActions: {flexDirection: 'row'},
+  scheduleAction: {marginBottom: 0, marginRight: 8, paddingHorizontal: 12, paddingVertical: 9},
   scheduleList: {paddingBottom: 30, paddingTop: 22},
   scheduleEntry: {alignItems: 'center', backgroundColor: colors.surface, borderColor: 'transparent', borderRadius: 11, borderWidth: 2, flexDirection: 'row', marginBottom: 10, minHeight: 86, paddingHorizontal: 14, paddingVertical: 12},
   scheduleEntryLive: {backgroundColor: colors.surfaceRaised, borderColor: colors.accent},

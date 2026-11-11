@@ -264,6 +264,38 @@ export const promoteTvScheduleEntry = (
   };
 };
 
+export const refreshTvScheduleAfterCurrent = (
+  schedule: TvSchedule,
+  catalog: Catalog,
+  timestamp = Date.now(),
+): TvSchedule => {
+  const current = schedule.entries[currentTvEntryIndex(schedule, timestamp)];
+  if (!current) return schedule;
+
+  const pool = candidatesFor(catalog);
+  const {endMs} = tvDayBounds(timestamp);
+  const refreshedCurrent: TvScheduleEntry = {
+    ...current,
+    id: `${schedule.date}-001`,
+  };
+  const counts = new Map([[current.contentId, 1]]);
+  const random = seededRandom(hash(`${schedule.date}:refresh:${timestamp}:${current.id}`));
+  const rest = fillSchedule(
+    pool,
+    random,
+    schedule.date,
+    Date.parse(current.endAt),
+    endMs,
+    2,
+    counts,
+  );
+  return {
+    ...schedule,
+    generatedAt: new Date(timestamp).toISOString(),
+    entries: [refreshedCurrent, ...rest],
+  };
+};
+
 export const currentTvEntryIndex = (
   schedule: TvSchedule,
   timestamp = Date.now(),

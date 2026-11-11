@@ -6,7 +6,7 @@ import {createRandomQueue, nextRandom, previousRandom, queueStartingAt, reconcil
 import {resolveResumeTarget} from '../src/playback/resume';
 import {buildPlayParams} from '../src/playback/launch';
 import {formatClock, formatDuration} from '../src/utils/format';
-import {createDailyTvSchedule, currentTvEntryIndex, promoteTvScheduleEntry, tvDateKey} from '../src/domain/tvSchedule';
+import {createDailyTvSchedule, currentTvEntryIndex, promoteTvScheduleEntry, refreshTvScheduleAfterCurrent, tvDateKey} from '../src/domain/tvSchedule';
 
 const movie = {version: 1, items: [{id: 'm1', type: 'movie', title: 'Filme', sources: [{id: 'src', name: 'HD', url: 'https://cdn.example/video.mp4'}]}]};
 const insecureMovie = {...movie.items[0], id: 'm2', sources: [{id: 'src', name: 'HD', url: 'http://inseguro/video.mp4'}]};
@@ -190,6 +190,31 @@ test('promove um programa futuro e recria a programação seguinte', () => {
   expect(promoted.entries.slice(newCurrent + 1).map(entry => `${entry.contentId}:${entry.episode?.id ?? ''}`))
     .not.toEqual(schedule.entries.slice(oldCurrent + 1).map(entry => `${entry.contentId}:${entry.episode?.id ?? ''}`));
   expect(Date.parse(promoted.entries.at(-1)!.endAt)).toBe(new Date(2026, 10, 8).getTime());
+});
+
+test('atualiza a programação somente depois do item atual', () => {
+  const timestamp = new Date(2026, 10, 7, 12, 0, 0).getTime();
+  const catalog = validateCatalog({
+    version: 1,
+    items: [
+      {...movie.items[0], duration: 30 * 60},
+      {...series, seasons: series.seasons.map(season => ({
+        ...season,
+        episodes: season.episodes.map(episode => ({...episode, duration: 30 * 60})),
+      }))},
+    ],
+  }).catalog;
+  const schedule = createDailyTvSchedule(catalog, timestamp);
+  const current = schedule.entries[currentTvEntryIndex(schedule, timestamp)];
+  const refreshed = refreshTvScheduleAfterCurrent(schedule, catalog, timestamp);
+
+  expect(refreshed.entries[0]).toMatchObject({
+    contentId: current.contentId,
+    startAt: current.startAt,
+    endAt: current.endAt,
+  });
+  expect(refreshed.entries[1].startAt).toBe(current.endAt);
+  expect(Date.parse(refreshed.entries.at(-1)!.endAt)).toBe(new Date(2026, 10, 8).getTime());
 });
 
 test('resolve formatos públicos conhecidos do Drive', () => {

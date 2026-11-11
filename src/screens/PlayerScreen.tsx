@@ -59,6 +59,7 @@ import { formatClock } from '../utils/format';
 import {
   currentTvEntryIndex,
   livePositionForDuration,
+  promoteTvScheduleEntry,
   refreshTvScheduleAfterCurrent,
   tvDateKey,
 } from '../domain/tvSchedule';
@@ -281,6 +282,38 @@ export function PlayerScreen({ navigation, route }: Props) {
       tvIndex: 0,
     });
   }, [app.catalog, navigation, params.tvSchedule, setError]);
+
+  const selectLiveScheduleEntry = useCallback(
+    (visibleIndex: number) => {
+      if (visibleIndex <= 0 || !params.tvSchedule || !app.catalog) return;
+      const timestamp = Date.now();
+      const selectedIndex = (params.tvIndex ?? 0) + visibleIndex;
+      const nextSchedule = promoteTvScheduleEntry(
+        params.tvSchedule,
+        app.catalog,
+        selectedIndex,
+        timestamp,
+      );
+      void settings.setTvSchedule(nextSchedule).catch(reason => {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : 'A programação foi alterada, mas não foi possível guardá-la.',
+        );
+      });
+      const entry = nextSchedule.entries[0];
+      navigation.replace('Player', {
+        contentId: entry.contentId,
+        title: entry.title,
+        episode: entry.episode,
+        source: entry.source,
+        startPositionMs: 0,
+        tvSchedule: nextSchedule,
+        tvIndex: 0,
+      });
+    },
+    [app.catalog, navigation, params.tvIndex, params.tvSchedule, setError],
+  );
 
   const seekBy = useCallback(
     (seconds: number) => {
@@ -729,12 +762,14 @@ export function PlayerScreen({ navigation, route }: Props) {
               <TVButton
                 label="Atualizar"
                 icon="↻"
+                iconOnly
                 onPress={refreshLiveSchedule}
                 style={styles.scheduleAction}
               />
               <TVButton
                 label="Fechar"
                 icon="×"
+                iconOnly
                 onPress={closeSchedule}
                 hasTVPreferredFocus
                 style={styles.scheduleAction}
@@ -747,12 +782,13 @@ export function PlayerScreen({ navigation, route }: Props) {
             {visibleSchedule.map((entry, index) => (
               <Pressable
                 key={entry.id}
-                accessibilityRole="text"
+                accessibilityRole="button"
                 accessibilityLabel={`${liveTime(entry.startAt)}, ${liveLabel(entry)}`}
-                focusable
+                accessibilityHint={index > 0 ? 'Selecionar como programa atual' : undefined}
+                focusable={index > 0}
                 onFocus={() => setFocusedScheduleId(entry.id)}
                 onBlur={() => setFocusedScheduleId(current => current === entry.id ? null : current)}
-                onPress={() => undefined}
+                onPress={() => selectLiveScheduleEntry(index)}
                 style={[
                   styles.scheduleEntry,
                   index === 0 && styles.scheduleEntryLive,
@@ -944,7 +980,7 @@ const styles = StyleSheet.create({
   scheduleEyebrow: {color: colors.accent, fontSize: 12, fontWeight: '900', letterSpacing: 1.5},
   scheduleTitle: {color: colors.text, fontSize: 28, fontWeight: '900', marginTop: 4},
   scheduleActions: {flexDirection: 'row'},
-  scheduleAction: {marginBottom: 0, marginRight: 8, paddingHorizontal: 12, paddingVertical: 9},
+  scheduleAction: {height: 48, justifyContent: 'center', marginBottom: 0, marginRight: 8, paddingHorizontal: 14, paddingVertical: 8, width: 52},
   scheduleList: {paddingBottom: 30, paddingTop: 22},
   scheduleEntry: {alignItems: 'center', backgroundColor: colors.surface, borderColor: 'transparent', borderRadius: 11, borderWidth: 2, flexDirection: 'row', marginBottom: 10, minHeight: 86, paddingHorizontal: 14, paddingVertical: 12},
   scheduleEntryLive: {backgroundColor: colors.surfaceRaised, borderColor: colors.accent},

@@ -11,6 +11,7 @@ interface Props {
   icon?: string;
   emphasized?: boolean;
   compact?: boolean;
+  iconOnly?: boolean;
 }
 
 export function TVButton({
@@ -22,6 +23,7 @@ export function TVButton({
   icon,
   emphasized = false,
   compact = false,
+  iconOnly = false,
 }: Props) {
   const [focused, setFocused] = useState(false);
   return (
@@ -43,9 +45,11 @@ export function TVButton({
       ]}>
       <View style={styles.content}>
         {icon ? (
-          <Text style={[styles.icon, compact && styles.compactIcon, focused && styles.focusedLabel]}>{icon}</Text>
+          <Text style={[styles.icon, compact && styles.compactIcon, iconOnly && styles.iconOnly, focused && styles.focusedLabel]}>{icon}</Text>
         ) : null}
-        <Text style={[styles.label, compact && styles.compactLabel, focused && styles.focusedLabel]}>{label}</Text>
+        {!iconOnly ? (
+          <Text style={[styles.label, compact && styles.compactLabel, focused && styles.focusedLabel]}>{label}</Text>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -58,6 +62,7 @@ const styles = StyleSheet.create({
   focused: {backgroundColor: colors.primary, borderColor: colors.focus, transform: [{scale: 1.05}]},
   disabled: {opacity: 0.45},
   icon: {color: colors.muted, fontSize: 21, fontWeight: '800', marginRight: 9},
+  iconOnly: {marginRight: 0},
   label: {color: colors.text, fontSize: 18, fontWeight: '700'},
   compactButton: {borderRadius: 7, borderWidth: 2, paddingHorizontal: 15, paddingVertical: 9},
   compactIcon: {fontSize: 17, marginRight: 7},

@@ -20,7 +20,7 @@ export interface TvScheduleEntry {
 }
 
 export interface TvSchedule {
-  version: 2;
+  version: 3;
   date: string;
   generatedAt: string;
   catalogSignature: string;
@@ -46,10 +46,11 @@ interface Candidate {
   estimatedDuration: boolean;
 }
 
-// Used only when the catalog omits duration. Most TV episodes are produced for
-// a 30-minute slot and contain roughly 22 minutes of actual video.
+// Used only when the catalog omits duration. A generous slot is preferable to
+// cutting longer episodes in the middle. When the file is shorter, the live
+// player repeats it until the next wall-clock slot.
 const MOVIE_FALLBACK_SECONDS = 100 * 60;
-const EPISODE_FALLBACK_SECONDS = 22 * 60;
+const EPISODE_FALLBACK_SECONDS = 60 * 60;
 
 const localDateKey = (date: Date): string => {
   const year = date.getFullYear();
@@ -73,8 +74,10 @@ export const catalogSignature = (catalog: Catalog): string =>
   catalog.items
     .map(item =>
       item.type === 'movie'
-        ? `${item.id}:${item.sources.length}`
-        : `${item.id}:${flattenSeries(item).length}`,
+        ? `${item.id}:${item.sources.length}:${item.duration ?? 0}`
+        : `${item.id}:${flattenSeries(item)
+            .map(episode => `${episode.id}:${episode.duration ?? 0}`)
+            .join(',')}`,
     )
     .join('|');
 
@@ -210,7 +213,7 @@ export const createDailyTvSchedule = (
   const entries = fillSchedule(pool, random, date, startMs, endMs);
 
   return {
-    version: 2,
+    version: 3,
     date,
     generatedAt: new Date(timestamp).toISOString(),
     catalogSignature: signature,
@@ -279,7 +282,7 @@ export const isCurrentTvSchedule = (
 ): schedule is TvSchedule =>
   Boolean(
     schedule &&
-      schedule.version === 2 &&
+      schedule.version === 3 &&
       schedule.date === tvDateKey(timestamp) &&
       schedule.catalogSignature === catalogSignature(catalog) &&
       schedule.entries.length,

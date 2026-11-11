@@ -152,6 +152,15 @@ test('cria programação diária determinística cobrindo exatamente 24 horas', 
   expect(currentTvEntryIndex(first, timestamp)).toBeGreaterThanOrEqual(0);
 });
 
+test('reserva uma hora para episódios sem duração para não os cortar', () => {
+  const timestamp = new Date(2026, 10, 7, 12, 0, 0).getTime();
+  const catalog = validateCatalog({version: 1, items: [series]}).catalog;
+  const schedule = createDailyTvSchedule(catalog, timestamp);
+  expect(schedule.version).toBe(3);
+  expect(schedule.entries[0].estimatedDuration).toBe(true);
+  expect(schedule.entries[0].durationSeconds).toBe(60 * 60);
+});
+
 test('promove um programa futuro e recria a programação seguinte', () => {
   const timestamp = new Date(2026, 10, 7, 12, 0, 0).getTime();
   const catalog = validateCatalog({

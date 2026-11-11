@@ -100,15 +100,17 @@ export function TVScreen({navigation, route}: Props) {
 
   const selectFutureEntry = useCallback(async (index: number) => {
     if (!schedule || !catalog || index <= currentIndex) return;
+    const timestamp = Date.now();
+    const nextSchedule = promoteTvScheduleEntry(schedule, catalog, index, timestamp);
+    // Reflect the remote-control selection immediately. Persistence should not
+    // make the UI look unresponsive on slower Android TV storage.
+    setNow(timestamp);
+    setSchedule(nextSchedule);
+    setError(null);
     try {
-      const timestamp = Date.now();
-      const nextSchedule = promoteTvScheduleEntry(schedule, catalog, index, timestamp);
       await settings.setTvSchedule(nextSchedule);
-      setNow(timestamp);
-      setSchedule(nextSchedule);
-      setError(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Falha ao alterar a programação.');
+      setError(reason instanceof Error ? reason.message : 'Programação alterada, mas não foi possível guardá-la.');
     }
   }, [catalog, currentIndex, schedule]);
 
@@ -119,7 +121,8 @@ export function TVScreen({navigation, route}: Props) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${clockTime(item.startAt)}, ${entryLabel(item)}`}
-          disabled={index <= currentIndex}
+          accessibilityHint={index > currentIndex ? 'Selecionar como programa atual' : undefined}
+          focusable={index > currentIndex}
           onPress={() => selectFutureEntry(index)}
           style={({focused}) => [
             styles.program,

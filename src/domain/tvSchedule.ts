@@ -221,6 +221,19 @@ export const createDailyTvSchedule = (
   };
 };
 
+export const createNextDailyTvSchedule = (
+  catalog: Catalog,
+  timestamp = Date.now(),
+): TvSchedule => {
+  const {endMs} = tvDayBounds(timestamp);
+  return createDailyTvSchedule(catalog, endMs + 1000);
+};
+
+export const shouldPrepareNextTvSchedule = (
+  schedule: TvSchedule,
+  currentIndex: number,
+): boolean => schedule.entries.length - currentIndex <= 5;
+
 export const promoteTvScheduleEntry = (
   schedule: TvSchedule,
   catalog: Catalog,

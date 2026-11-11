@@ -57,10 +57,13 @@ import { queueStartingAt, stepRandomQueue } from '../playback/randomQueue';
 import { PlayMode } from '../domain/playback';
 import { formatClock } from '../utils/format';
 import {
+  createNextDailyTvSchedule,
   currentTvEntryIndex,
+  isCurrentTvSchedule,
   livePositionForDuration,
   promoteTvScheduleEntry,
   refreshTvScheduleAfterCurrent,
+  shouldPrepareNextTvSchedule,
   tvDateKey,
 } from '../domain/tvSchedule';
 import { settings } from '../storage/settings';
@@ -123,6 +126,7 @@ export function PlayerScreen({ navigation, route }: Props) {
   // Failure count handed to the next episode: grows on automatic skips, resets on normal navigation
   const nextFailuresRef = useRef(0);
   const lastLiveSyncRef = useRef(0);
+  const nextSchedulePreparingRef = useRef(false);
 
   const [paused, setPaused] = useState(false);
   const [controls, setControlsState] = useState(true);
@@ -472,12 +476,38 @@ export function PlayerScreen({ navigation, route }: Props) {
         return;
       }
       const expected = currentTvEntryIndex(params.tvSchedule, timestamp);
+      if (
+        app.catalog &&
+        shouldPrepareNextTvSchedule(params.tvSchedule, expected) &&
+        !nextSchedulePreparingRef.current
+      ) {
+        nextSchedulePreparingRef.current = true;
+        const prepared = createNextDailyTvSchedule(app.catalog, timestamp);
+        void settings.getNextTvSchedule()
+          .then(saved =>
+            isCurrentTvSchedule(
+              saved,
+              app.catalog!,
+              Date.parse(prepared.entries[0].startAt),
+            )
+              ? undefined
+              : settings.setNextTvSchedule(prepared),
+          )
+          .catch(reason => {
+            nextSchedulePreparingRef.current = false;
+            setError(
+              reason instanceof Error
+                ? reason.message
+                : 'Falha ao preparar a programação de amanhã.',
+            );
+          });
+      }
       if (expected !== (params.tvIndex ?? 0)) openTvEntry(expected);
     };
     sync();
     const timer = setInterval(sync, 1000);
     return () => clearInterval(timer);
-  }, [navigation, openTvEntry, params.tvIndex, params.tvSchedule]);
+  }, [app.catalog, navigation, openTvEntry, params.tvIndex, params.tvSchedule, setError]);
 
   const switchSource = useCallback(
     (nextSource: MediaSource) => {

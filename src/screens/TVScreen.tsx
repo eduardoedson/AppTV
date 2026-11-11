@@ -9,9 +9,11 @@ import {TVButton} from '../components/TVButton';
 import {colors} from '../theme';
 import {
   createDailyTvSchedule,
+  createNextDailyTvSchedule,
   currentTvEntryIndex,
   isCurrentTvSchedule,
   promoteTvScheduleEntry,
+  shouldPrepareNextTvSchedule,
   TvSchedule,
   TvScheduleEntry,
   tvDateKey,
@@ -41,9 +43,14 @@ export function TVScreen({navigation, route}: Props) {
   const loadSchedule = useCallback(async () => {
     if (!catalog) return;
     try {
-      const saved = await settings.getTvSchedule();
+      const [saved, prepared] = await Promise.all([
+        settings.getTvSchedule(),
+        settings.getNextTvSchedule(),
+      ]);
       const next = isCurrentTvSchedule(saved, catalog)
         ? saved
+        : isCurrentTvSchedule(prepared, catalog)
+        ? prepared
         : createDailyTvSchedule(catalog);
       if (next !== saved) await settings.setTvSchedule(next);
       setSchedule(next);
@@ -84,6 +91,24 @@ export function TVScreen({navigation, route}: Props) {
   const current = schedule?.entries[currentIndex];
   const next = schedule?.entries[currentIndex + 1];
   const remaining = current ? Math.max(0, Date.parse(current.endAt) - now) : 0;
+
+  useEffect(() => {
+    if (
+      !catalog ||
+      !schedule ||
+      !shouldPrepareNextTvSchedule(schedule, currentIndex)
+    ) return;
+    const prepare = async () => {
+      const candidate = createNextDailyTvSchedule(catalog);
+      const saved = await settings.getNextTvSchedule();
+      if (!isCurrentTvSchedule(saved, catalog, Date.parse(candidate.entries[0].startAt))) {
+        await settings.setNextTvSchedule(candidate);
+      }
+    };
+    void prepare().catch(reason =>
+      setError(reason instanceof Error ? reason.message : 'Falha ao preparar a programação de amanhã.'),
+    );
+  }, [catalog, currentIndex, schedule]);
 
   const watchLive = () => {
     if (!schedule || !current) return;

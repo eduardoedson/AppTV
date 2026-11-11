@@ -6,7 +6,7 @@ import {createRandomQueue, nextRandom, previousRandom, queueStartingAt, reconcil
 import {resolveResumeTarget} from '../src/playback/resume';
 import {buildPlayParams} from '../src/playback/launch';
 import {formatClock, formatDuration} from '../src/utils/format';
-import {createDailyTvSchedule, currentTvEntryIndex, promoteTvScheduleEntry, refreshTvScheduleAfterCurrent, tvDateKey} from '../src/domain/tvSchedule';
+import {createDailyTvSchedule, createNextDailyTvSchedule, currentTvEntryIndex, promoteTvScheduleEntry, refreshTvScheduleAfterCurrent, shouldPrepareNextTvSchedule, tvDateKey} from '../src/domain/tvSchedule';
 
 const movie = {version: 1, items: [{id: 'm1', type: 'movie', title: 'Filme', sources: [{id: 'src', name: 'HD', url: 'https://cdn.example/video.mp4'}]}]};
 const insecureMovie = {...movie.items[0], id: 'm2', sources: [{id: 'src', name: 'HD', url: 'http://inseguro/video.mp4'}]};
@@ -159,6 +159,16 @@ test('reserva uma hora para episódios sem duração para não os cortar', () =>
   expect(schedule.version).toBe(3);
   expect(schedule.entries[0].estimatedDuration).toBe(true);
   expect(schedule.entries[0].durationSeconds).toBe(60 * 60);
+});
+
+test('prepara a programação do dia seguinte quando restam cinco itens', () => {
+  const timestamp = new Date(2026, 10, 7, 23, 0, 0).getTime();
+  const catalog = validateCatalog({version: 1, items: [series]}).catalog;
+  const today = createDailyTvSchedule(catalog, timestamp);
+  const tomorrow = createNextDailyTvSchedule(catalog, timestamp);
+  expect(tomorrow.date).toBe(tvDateKey(new Date(2026, 10, 8).getTime()));
+  expect(shouldPrepareNextTvSchedule(today, today.entries.length - 5)).toBe(true);
+  expect(shouldPrepareNextTvSchedule(today, today.entries.length - 6)).toBe(false);
 });
 
 test('promove um programa futuro e recria a programação seguinte', () => {

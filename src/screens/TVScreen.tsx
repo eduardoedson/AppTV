@@ -9,14 +9,13 @@ import {TVButton} from '../components/TVButton';
 import {colors} from '../theme';
 import {
   createDailyTvSchedule,
-  createNextDailyTvSchedule,
   currentTvEntryIndex,
+  extendTvSchedule,
   isCurrentTvSchedule,
   promoteTvScheduleEntry,
   shouldPrepareNextTvSchedule,
   TvSchedule,
   TvScheduleEntry,
-  tvDateKey,
 } from '../domain/tvSchedule';
 import {settings} from '../storage/settings';
 import {formatClock} from '../utils/format';
@@ -43,14 +42,9 @@ export function TVScreen({navigation, route}: Props) {
   const loadSchedule = useCallback(async () => {
     if (!catalog) return;
     try {
-      const [saved, prepared] = await Promise.all([
-        settings.getTvSchedule(),
-        settings.getNextTvSchedule(),
-      ]);
+      const saved = await settings.getTvSchedule();
       const next = isCurrentTvSchedule(saved, catalog)
         ? saved
-        : isCurrentTvSchedule(prepared, catalog)
-        ? prepared
         : createDailyTvSchedule(catalog);
       if (next !== saved) await settings.setTvSchedule(next);
       setSchedule(next);
@@ -82,10 +76,9 @@ export function TVScreen({navigation, route}: Props) {
     const timer = setInterval(() => {
       const timestamp = Date.now();
       setNow(timestamp);
-      if (schedule && schedule.date !== tvDateKey(timestamp)) loadSchedule();
     }, 1000);
     return () => clearInterval(timer);
-  }, [loadSchedule, schedule]);
+  }, []);
 
   const currentIndex = schedule ? currentTvEntryIndex(schedule, now) : 0;
   const current = schedule?.entries[currentIndex];
@@ -99,14 +92,12 @@ export function TVScreen({navigation, route}: Props) {
       !shouldPrepareNextTvSchedule(schedule, currentIndex)
     ) return;
     const prepare = async () => {
-      const candidate = createNextDailyTvSchedule(catalog);
-      const saved = await settings.getNextTvSchedule();
-      if (!isCurrentTvSchedule(saved, catalog, Date.parse(candidate.entries[0].startAt))) {
-        await settings.setNextTvSchedule(candidate);
-      }
+      const extended = extendTvSchedule(schedule, catalog);
+      setSchedule(extended);
+      await settings.setTvSchedule(extended);
     };
     void prepare().catch(reason =>
-      setError(reason instanceof Error ? reason.message : 'Falha ao preparar a programação de amanhã.'),
+      setError(reason instanceof Error ? reason.message : 'Falha ao ampliar a programação.'),
     );
   }, [catalog, currentIndex, schedule]);
 

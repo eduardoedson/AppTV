@@ -6,7 +6,7 @@ import {createRandomQueue, nextRandom, previousRandom, queueStartingAt, reconcil
 import {resolveResumeTarget} from '../src/playback/resume';
 import {buildPlayParams} from '../src/playback/launch';
 import {formatClock, formatDuration} from '../src/utils/format';
-import {createDailyTvSchedule, createNextDailyTvSchedule, currentTvEntryIndex, promoteTvScheduleEntry, refreshTvScheduleAfterCurrent, shouldPrepareNextTvSchedule, tvDateKey} from '../src/domain/tvSchedule';
+import {createDailyTvSchedule, currentTvEntryIndex, extendTvSchedule, promoteTvScheduleEntry, refreshTvScheduleAfterCurrent, shouldPrepareNextTvSchedule, tvDateKey} from '../src/domain/tvSchedule';
 
 const movie = {version: 1, items: [{id: 'm1', type: 'movie', title: 'Filme', sources: [{id: 'src', name: 'HD', url: 'https://cdn.example/video.mp4'}]}]};
 const insecureMovie = {...movie.items[0], id: 'm2', sources: [{id: 'src', name: 'HD', url: 'http://inseguro/video.mp4'}]};
@@ -124,7 +124,7 @@ test('formata tempos', () => {
   expect(formatDuration(undefined)).toBeNull();
 });
 
-test('cria programação diária determinística cobrindo exatamente 24 horas', () => {
+test('cria programação diária determinística sem cortar o último item à meia-noite', () => {
   const timestamp = new Date(2026, 10, 7, 12, 0, 0).getTime();
   const catalog = validateCatalog({
     version: 1,
@@ -141,7 +141,8 @@ test('cria programação diária determinística cobrindo exatamente 24 horas', 
   expect(first.date).toBe(tvDateKey(timestamp));
   expect(first.entries.map(entry => entry.contentId)).toEqual(second.entries.map(entry => entry.contentId));
   expect(Date.parse(first.entries[0].startAt)).toBe(new Date(2026, 10, 7).getTime());
-  expect(Date.parse(first.entries.at(-1)!.endAt)).toBe(new Date(2026, 10, 8).getTime());
+  expect(Date.parse(first.entries.at(-1)!.startAt)).toBeLessThan(new Date(2026, 10, 8).getTime());
+  expect(Date.parse(first.entries.at(-1)!.endAt)).toBeGreaterThanOrEqual(new Date(2026, 10, 8).getTime());
   const counts = first.entries.reduce<Record<string, number>>((result, entry) => {
     result[entry.contentId] = (result[entry.contentId] ?? 0) + 1;
     return result;
@@ -156,17 +157,19 @@ test('reserva uma hora para episódios sem duração para não os cortar', () =>
   const timestamp = new Date(2026, 10, 7, 12, 0, 0).getTime();
   const catalog = validateCatalog({version: 1, items: [series]}).catalog;
   const schedule = createDailyTvSchedule(catalog, timestamp);
-  expect(schedule.version).toBe(3);
+  expect(schedule.version).toBe(4);
   expect(schedule.entries[0].estimatedDuration).toBe(true);
   expect(schedule.entries[0].durationSeconds).toBe(60 * 60);
 });
 
-test('prepara a programação do dia seguinte quando restam cinco itens', () => {
+test('concatena mais programação à lista atual quando restam cinco itens', () => {
   const timestamp = new Date(2026, 10, 7, 23, 0, 0).getTime();
   const catalog = validateCatalog({version: 1, items: [series]}).catalog;
   const today = createDailyTvSchedule(catalog, timestamp);
-  const tomorrow = createNextDailyTvSchedule(catalog, timestamp);
-  expect(tomorrow.date).toBe(tvDateKey(new Date(2026, 10, 8).getTime()));
+  const extended = extendTvSchedule(today, catalog, timestamp);
+  expect(extended.entries.slice(0, today.entries.length)).toEqual(today.entries);
+  expect(extended.entries.length).toBeGreaterThan(today.entries.length);
+  expect(extended.entries[today.entries.length].startAt).toBe(today.entries.at(-1)!.endAt);
   expect(shouldPrepareNextTvSchedule(today, today.entries.length - 5)).toBe(true);
   expect(shouldPrepareNextTvSchedule(today, today.entries.length - 6)).toBe(false);
 });
@@ -199,7 +202,7 @@ test('promove um programa futuro e recria a programação seguinte', () => {
   expect(promoted.entries[newCurrent].episode?.id).toBe(selected.episode?.id);
   expect(promoted.entries.slice(newCurrent + 1).map(entry => `${entry.contentId}:${entry.episode?.id ?? ''}`))
     .not.toEqual(schedule.entries.slice(oldCurrent + 1).map(entry => `${entry.contentId}:${entry.episode?.id ?? ''}`));
-  expect(Date.parse(promoted.entries.at(-1)!.endAt)).toBe(new Date(2026, 10, 8).getTime());
+  expect(Date.parse(promoted.entries.at(-1)!.endAt)).toBeGreaterThanOrEqual(timestamp + 24 * 60 * 60 * 1000);
 });
 
 test('atualiza a programação somente depois do item atual', () => {
@@ -224,7 +227,7 @@ test('atualiza a programação somente depois do item atual', () => {
     endAt: current.endAt,
   });
   expect(refreshed.entries[1].startAt).toBe(current.endAt);
-  expect(Date.parse(refreshed.entries.at(-1)!.endAt)).toBe(new Date(2026, 10, 8).getTime());
+  expect(Date.parse(refreshed.entries.at(-1)!.endAt)).toBeGreaterThanOrEqual(timestamp + 24 * 60 * 60 * 1000);
 });
 
 test('resolve formatos públicos conhecidos do Drive', () => {

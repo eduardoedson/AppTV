@@ -20,7 +20,7 @@ export interface TvScheduleEntry {
 }
 
 export interface TvSchedule {
-  version: 3;
+  version: 4;
   date: string;
   generatedAt: string;
   catalogSignature: string;
@@ -182,10 +182,9 @@ const fillSchedule = (
   let cursor = startMs;
   while (cursor < endMs) {
     const candidate = pickNext();
-    const scheduledSeconds = Math.min(
-      candidate.durationSeconds,
-      Math.ceil((endMs - cursor) / 1000),
-    );
+    // The boundary determines when to stop adding entries, not when to cut the
+    // last one. A film or episode that starts before midnight plays to its end.
+    const scheduledSeconds = candidate.durationSeconds;
     const next = cursor + scheduledSeconds * 1000;
     entries.push({
       ...candidate,
@@ -213,7 +212,7 @@ export const createDailyTvSchedule = (
   const entries = fillSchedule(pool, random, date, startMs, endMs);
 
   return {
-    version: 3,
+    version: 4,
     date,
     generatedAt: new Date(timestamp).toISOString(),
     catalogSignature: signature,
@@ -221,12 +220,34 @@ export const createDailyTvSchedule = (
   };
 };
 
-export const createNextDailyTvSchedule = (
+export const extendTvSchedule = (
+  schedule: TvSchedule,
   catalog: Catalog,
   timestamp = Date.now(),
 ): TvSchedule => {
-  const {endMs} = tvDayBounds(timestamp);
-  return createDailyTvSchedule(catalog, endMs + 1000);
+  const pool = candidatesFor(catalog);
+  if (!pool.length) return schedule;
+  const lastEnd = Date.parse(schedule.entries.at(-1)?.endAt ?? '');
+  const startMs = Number.isFinite(lastEnd) ? lastEnd : timestamp;
+  const counts = schedule.entries.reduce((result, entry) => {
+    result.set(entry.contentId, (result.get(entry.contentId) ?? 0) + 1);
+    return result;
+  }, new Map<string, number>());
+  const random = seededRandom(hash(`${schedule.date}:extend:${startMs}:${schedule.entries.length}`));
+  const appended = fillSchedule(
+    pool,
+    random,
+    schedule.date,
+    startMs,
+    startMs + 24 * 60 * 60 * 1000,
+    schedule.entries.length + 1,
+    counts,
+  );
+  return {
+    ...schedule,
+    generatedAt: new Date(timestamp).toISOString(),
+    entries: [...schedule.entries, ...appended],
+  };
 };
 
 export const shouldPrepareNextTvSchedule = (
@@ -245,14 +266,11 @@ export const promoteTvScheduleEntry = (
   if (!selected || selectedIndex <= currentIndex) return schedule;
 
   const pool = candidatesFor(catalog);
-  const {endMs} = tvDayBounds(timestamp);
+  const endMs = timestamp + 24 * 60 * 60 * 1000;
   const counts = new Map<string, number>();
   counts.set(selected.contentId, 1);
 
-  const selectedDuration = Math.min(
-    selected.durationSeconds,
-    Math.ceil((endMs - timestamp) / 1000),
-  );
+  const selectedDuration = selected.durationSeconds;
   const promoted: TvScheduleEntry = {
     ...selected,
     id: `${schedule.date}-001`,
@@ -286,7 +304,7 @@ export const refreshTvScheduleAfterCurrent = (
   if (!current) return schedule;
 
   const pool = candidatesFor(catalog);
-  const {endMs} = tvDayBounds(timestamp);
+  const endMs = timestamp + 24 * 60 * 60 * 1000;
   const refreshedCurrent: TvScheduleEntry = {
     ...current,
     id: `${schedule.date}-001`,
@@ -327,8 +345,9 @@ export const isCurrentTvSchedule = (
 ): schedule is TvSchedule =>
   Boolean(
     schedule &&
-      schedule.version === 3 &&
-      schedule.date === tvDateKey(timestamp) &&
+      schedule.version === 4 &&
       schedule.catalogSignature === catalogSignature(catalog) &&
-      schedule.entries.length,
+      schedule.entries.length &&
+      timestamp >= Date.parse(schedule.entries[0].startAt) &&
+      timestamp < Date.parse(schedule.entries.at(-1)!.endAt),
   );

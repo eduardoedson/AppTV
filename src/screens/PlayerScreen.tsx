@@ -57,14 +57,12 @@ import { queueStartingAt, stepRandomQueue } from '../playback/randomQueue';
 import { PlayMode } from '../domain/playback';
 import { formatClock } from '../utils/format';
 import {
-  createNextDailyTvSchedule,
   currentTvEntryIndex,
-  isCurrentTvSchedule,
+  extendTvSchedule,
   livePositionForDuration,
   promoteTvScheduleEntry,
   refreshTvScheduleAfterCurrent,
   shouldPrepareNextTvSchedule,
-  tvDateKey,
 } from '../domain/tvSchedule';
 import { settings } from '../storage/settings';
 
@@ -140,6 +138,13 @@ export function PlayerScreen({ navigation, route }: Props) {
   const [nowMs, setNowMs] = useState(Date.now());
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [focusedScheduleId, setFocusedScheduleId] = useState<string | null>(null);
+
+  useEffect(() => {
+    durationRef.current = 0;
+    positionRef.current = 0;
+    setDurationMs(0);
+    setPositionMs(0);
+  }, [contentId, episodeId, sourceId]);
 
   const catalogItem = useMemo(
     () => app.catalog?.items.find(item => item.id === contentId),
@@ -275,13 +280,7 @@ export function PlayerScreen({ navigation, route }: Props) {
           : 'A programação foi atualizada, mas não foi possível guardá-la.',
       );
     }
-    const entry = nextSchedule.entries[0];
-    navigation.replace('Player', {
-      contentId: entry.contentId,
-      title: entry.title,
-      episode: entry.episode,
-      source: entry.source,
-      startPositionMs: Math.max(0, timestamp - Date.parse(entry.startAt)),
+    navigation.setParams({
       tvSchedule: nextSchedule,
       tvIndex: 0,
     });
@@ -467,39 +466,30 @@ export function PlayerScreen({ navigation, route }: Props) {
 
   // Linear TV follows wall-clock time. It cannot be paused or shifted by the remote.
   useEffect(() => {
-    if (!params.tvSchedule) return;
+    const tvSchedule = params.tvSchedule;
+    if (!tvSchedule) return;
     const sync = () => {
       const timestamp = Date.now();
       setNowMs(timestamp);
-      if (params.tvSchedule?.date !== tvDateKey(timestamp)) {
-        navigation.replace('TV');
-        return;
-      }
-      const expected = currentTvEntryIndex(params.tvSchedule, timestamp);
+      const expected = currentTvEntryIndex(tvSchedule, timestamp);
       if (
         app.catalog &&
-        shouldPrepareNextTvSchedule(params.tvSchedule, expected) &&
+        shouldPrepareNextTvSchedule(tvSchedule, expected) &&
         !nextSchedulePreparingRef.current
       ) {
         nextSchedulePreparingRef.current = true;
-        const prepared = createNextDailyTvSchedule(app.catalog, timestamp);
-        void settings.getNextTvSchedule()
-          .then(saved =>
-            isCurrentTvSchedule(
-              saved,
-              app.catalog!,
-              Date.parse(prepared.entries[0].startAt),
-            )
-              ? undefined
-              : settings.setNextTvSchedule(prepared),
-          )
+        const extended = extendTvSchedule(tvSchedule, app.catalog, timestamp);
+        void settings.setTvSchedule(extended)
+          .then(() => navigation.setParams({tvSchedule: extended}))
           .catch(reason => {
-            nextSchedulePreparingRef.current = false;
             setError(
               reason instanceof Error
                 ? reason.message
-                : 'Falha ao preparar a programação de amanhã.',
+                : 'Falha ao ampliar a programação.',
             );
+          })
+          .finally(() => {
+            nextSchedulePreparingRef.current = false;
           });
       }
       if (expected !== (params.tvIndex ?? 0)) openTvEntry(expected);

@@ -2,6 +2,7 @@ import {
   Catalog,
   CatalogItem,
   flattenSeries,
+  isInLiveTv,
   MediaSource,
   PlayableEpisode,
   pickSource,
@@ -70,8 +71,10 @@ export const tvDayBounds = (timestamp = Date.now()) => {
   return {startMs: start.getTime(), endMs: end.getTime()};
 };
 
+// Only items that take part in the live TV count, so toggling "live" rebuilds the day's schedule.
 export const catalogSignature = (catalog: Catalog): string =>
   catalog.items
+    .filter(isInLiveTv)
     .map(item =>
       item.type === 'movie'
         ? `${item.id}:${item.sources.length}:${item.duration ?? 0}`
@@ -98,7 +101,7 @@ const seededRandom = (seed: number) => {
 };
 
 const candidatesFor = (catalog: Catalog): Candidate[] =>
-  catalog.items.flatMap((item: CatalogItem): Candidate[] => {
+  catalog.items.filter(isInLiveTv).flatMap((item: CatalogItem): Candidate[] => {
     if (item.type === 'movie') {
       const source = pickSource(item.sources);
       if (!source) return [];

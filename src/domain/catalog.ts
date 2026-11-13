@@ -19,6 +19,8 @@ export interface CatalogBaseItem {
   backdrop?: string;
   addedAt?: string;
   genres?: string[];
+  // false keeps the item out of the live TV schedule; it still appears in the library
+  live?: boolean;
 }
 
 export interface Movie extends CatalogBaseItem {
@@ -65,6 +67,9 @@ export interface ValidatedCatalog {
   catalog: Catalog;
   diagnostics: CatalogDiagnostic[];
 }
+
+// Items are part of the live TV schedule unless the catalog sets "live": false.
+export const isInLiveTv = (item: CatalogItem): boolean => item.live !== false;
 
 export interface PlayableEpisode extends Episode {
   contentId: string;

@@ -10,7 +10,8 @@
     "test": "jest --runInBand",
     "typecheck": "tsc --noEmit",
     "android:release": "cd android && gradlew.bat assembleRelease",
-    "google:login": "node scripts/google-login.js"
+    "apk:publicar": "node scripts/publicar-apk.js",
+    "catalogo:enviar": "node scripts/catalogo/enviar.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.1.1",

@@ -11,7 +11,9 @@
 /videos/
 
 # Catalog and update manifest: the published copies live on Google Drive
+/catalogo/
 /AppTV.catalago.json
+/AppTV.catalago.json.*
 /AppTV.update.json
 
 # Local backups and editor history

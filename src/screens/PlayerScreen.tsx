@@ -101,6 +101,23 @@ const trackLabel = (
   track.language?.toUpperCase() ||
   `${fallback} ${track.index + 1}`;
 
+const portugueseAudioTrack = (tracks: AudioTrack[]): AudioTrack | undefined => {
+  const portuguese = /^(pt|pt-br|por|pob)$/i;
+  const brazilianTitle = /pt[- ]?br|portugu[eê]s.*brasil|brasil.*portugu[eê]s/i;
+  return (
+    tracks.find(
+      track =>
+        brazilianTitle.test(track.title ?? '') ||
+        /^(pt-br|pob)$/i.test(track.language ?? ''),
+    ) ??
+    tracks.find(
+      track =>
+        portuguese.test(track.language ?? '') ||
+        /portugu[eê]s|dublado/i.test(track.title ?? ''),
+    )
+  );
+};
+
 const resolveSource = (source: MediaSource): ResolvedSource => {
   const fromDrive = isDriveSource(source.url, source.provider);
   const needsAuth = fromDrive && isDriveAuthConfigured();
@@ -743,7 +760,8 @@ export function PlayerScreen({ navigation, route }: Props) {
     setAudioTracks(data.audioTracks);
     setTextTracks(data.textTracks);
     setSelectedAudioIndex(
-      data.audioTracks.find(track => track.selected)?.index ??
+      (isLiveTV ? portugueseAudioTrack(data.audioTracks) : undefined)?.index ??
+        data.audioTracks.find(track => track.selected)?.index ??
         data.audioTracks[0]?.index ??
         null,
     );
@@ -752,7 +770,7 @@ export function PlayerScreen({ navigation, route }: Props) {
         data.textTracks[0]?.index ??
         null,
     );
-    setSubtitlesDisabled(false);
+    setSubtitlesDisabled(isLiveTV);
     const liveEntry = params.tvSchedule?.entries[params.tvIndex ?? 0];
     const resume = liveEntry
       ? livePositionForDuration(
@@ -844,11 +862,13 @@ export function PlayerScreen({ navigation, route }: Props) {
           progressUpdateInterval={1000}
           selectedAudioTrack={
             selectedAudioIndex === null
-              ? undefined
+              ? isLiveTV
+                ? {type: SelectedTrackType.LANGUAGE, value: 'por'}
+                : undefined
               : {type: SelectedTrackType.INDEX, value: selectedAudioIndex}
           }
           selectedTextTrack={
-            subtitlesDisabled
+            isLiveTV || subtitlesDisabled
               ? {type: SelectedTrackType.DISABLED}
               : selectedTextIndex === null
                 ? undefined

@@ -35,6 +35,8 @@ interface Entry {
   resume?: ResumeTarget;
 }
 
+type LibraryTab = 'movie' | 'series';
+
 function CatalogSkeleton({ columnCount }: { columnCount: number }) {
   return (
     <View
@@ -105,6 +107,7 @@ export function LibraryScreen({ navigation }: Props) {
   const [versionLabel, setVersionLabel] = useState('Versão');
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const [selectedTab, setSelectedTab] = useState<LibraryTab>('movie');
 
   // Show the installed version and check for a new one (cached for 30 minutes)
   useFocusEffect(
@@ -137,10 +140,19 @@ export function LibraryScreen({ navigation }: Props) {
     }, []),
   );
 
-  const entries = useMemo(
+  const allEntries = useMemo(
     () => buildEntries(app.catalog?.items ?? [], rows),
     [app.catalog, rows],
   );
+  const entries = useMemo(
+    () => allEntries.filter(entry => entry.item.type === selectedTab),
+    [allEntries, selectedTab],
+  );
+  const movieCount = useMemo(
+    () => allEntries.filter(entry => entry.item.type === 'movie').length,
+    [allEntries],
+  );
+  const seriesCount = allEntries.length - movieCount;
   const columnCount = Math.max(
     1,
     Math.floor((width - HORIZONTAL_PADDING) / CARD_SLOT_WIDTH),
@@ -152,6 +164,11 @@ export function LibraryScreen({ navigation }: Props) {
   const focusedPosition = focusedItemId
     ? (entryIndexById.get(focusedItemId) ?? 0) + 1
     : 1;
+
+  const selectTab = useCallback((tab: LibraryTab) => {
+    setSelectedTab(tab);
+    setFocusedItemId(null);
+  }, []);
 
   // Cards always open the details screen; playback starts from there
   const open = useCallback(
@@ -215,8 +232,8 @@ export function LibraryScreen({ navigation }: Props) {
             <Text style={styles.eyebrow}>SUA BIBLIOTECA</Text>
             <Text style={styles.brand}>AppTV</Text>
             <Text style={styles.catalogCount}>
-              {entries.length}{' '}
-              {entries.length === 1
+              {allEntries.length}{' '}
+              {allEntries.length === 1
                 ? 'título disponível'
                 : 'títulos disponíveis'}
             </Text>
@@ -258,11 +275,35 @@ export function LibraryScreen({ navigation }: Props) {
         </View>
       </View>
       {app.error ? <Text style={styles.notice}>{app.error}</Text> : null}
-      {entries.length ? (
+      {allEntries.length ? (
         <View style={styles.catalogArea}>
+          <View style={styles.tabs}>
+            <TVButton
+              label={`Filmes  ${movieCount}`}
+              icon="▶"
+              compact
+              emphasized={selectedTab === 'movie'}
+              onPress={() => selectTab('movie')}
+              style={[
+                styles.tabButton,
+                selectedTab === 'movie' && styles.tabButtonSelected,
+              ]}
+            />
+            <TVButton
+              label={`Séries  ${seriesCount}`}
+              icon="▦"
+              compact
+              emphasized={selectedTab === 'series'}
+              onPress={() => selectTab('series')}
+              style={[
+                styles.tabButton,
+                selectedTab === 'series' && styles.tabButtonSelected,
+              ]}
+            />
+          </View>
           <View style={styles.positionIndicator}>
             <Text style={styles.positionText}>
-              {focusedPosition} de {entries.length}
+              {entries.length ? focusedPosition : 0} de {entries.length}
             </Text>
           </View>
           {refreshing ? (
@@ -270,7 +311,7 @@ export function LibraryScreen({ navigation }: Props) {
           ) : (
             <View style={styles.catalogFocusGuide}>
               <FlatList
-                key={`catalog-${columnCount}`}
+                key={`catalog-${selectedTab}-${columnCount}`}
                 data={entries}
                 keyExtractor={entry => entry.item.id}
                 numColumns={columnCount}
@@ -396,6 +437,23 @@ const styles = StyleSheet.create({
   notice: { color: '#f3c969', fontSize: 16, marginVertical: 10 },
   catalogArea: { flex: 1, position: 'relative' },
   catalogFocusGuide: { flex: 1 },
+  tabs: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    height: 58,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+  },
+  tabButton: {
+    backgroundColor: '#21192B',
+    borderColor: '#30243D',
+    marginBottom: 0,
+    minWidth: 150,
+  },
+  tabButtonSelected: {
+    backgroundColor: colors.primaryDark,
+    borderColor: colors.accent,
+  },
   positionIndicator: {
     backgroundColor: 'rgba(23, 17, 32, 0.94)',
     borderColor: colors.surfaceRaised,
@@ -405,7 +463,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     position: 'absolute',
     right: 14,
-    top: 8,
+    top: 12,
     zIndex: 20,
   },
   positionText: {
@@ -416,14 +474,14 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 70,
     paddingHorizontal: 14,
-    paddingTop: 38,
+    paddingTop: 12,
   },
   row: { justifyContent: 'flex-start' },
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 14,
-    paddingTop: 38,
+    paddingTop: 12,
   },
   skeletonCard: {
     height: 325,

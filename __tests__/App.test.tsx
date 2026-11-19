@@ -230,6 +230,30 @@ test('atualiza a programação somente depois do item atual', () => {
   expect(Date.parse(refreshed.entries.at(-1)!.endAt)).toBeGreaterThanOrEqual(timestamp + 24 * 60 * 60 * 1000);
 });
 
+test('desliga filmes sem alterar o programa que está no ar', () => {
+  const timestamp = new Date(2026, 10, 7, 12, 0, 0).getTime();
+  const catalog = validateCatalog({
+    version: 1,
+    items: [
+      {...movie.items[0], duration: 30 * 60},
+      {...series, seasons: series.seasons.map(season => ({
+        ...season,
+        episodes: season.episodes.map(episode => ({...episode, duration: 30 * 60})),
+      }))},
+    ],
+  }).catalog;
+  const schedule = createDailyTvSchedule(catalog, timestamp);
+  const current = schedule.entries[currentTvEntryIndex(schedule, timestamp)];
+  const withoutMovies = refreshTvScheduleAfterCurrent(
+    {...schedule, includeMovies: false},
+    catalog,
+    timestamp,
+  );
+
+  expect(withoutMovies.entries[0]).toEqual({...current, id: `${schedule.date}-001`});
+  expect(withoutMovies.entries.slice(1).every(entry => Boolean(entry.episode))).toBe(true);
+});
+
 test('resolve formatos públicos conhecidos do Drive', () => {
   expect(extractDriveFileId('https://drive.google.com/file/d/abc_123/view')).toBe('abc_123');
   expect(resolveMediaUrl('https://drive.google.com/open?id=abc_123', 'google-drive', '', false)).toContain('id=abc_123');

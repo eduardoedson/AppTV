@@ -3,6 +3,7 @@ import {TvSchedule} from '../domain/tvSchedule';
 
 const CATALOG_URL_KEY = 'apptv.settings.catalogUrl';
 const TV_SCHEDULE_KEY = 'apptv.tv.schedule';
+const TV_INCLUDE_MOVIES_KEY = 'apptv.tv.includeMovies';
 
 export const settings = {
   getCatalogUrl: () => AsyncStorage.getItem(CATALOG_URL_KEY),
@@ -18,4 +19,8 @@ export const settings = {
   },
   setTvSchedule: (schedule: TvSchedule) =>
     AsyncStorage.setItem(TV_SCHEDULE_KEY, JSON.stringify(schedule)),
+  getTvIncludeMovies: async (): Promise<boolean> =>
+    (await AsyncStorage.getItem(TV_INCLUDE_MOVIES_KEY)) !== 'false',
+  setTvIncludeMovies: (includeMovies: boolean) =>
+    AsyncStorage.setItem(TV_INCLUDE_MOVIES_KEY, String(includeMovies)),
 };

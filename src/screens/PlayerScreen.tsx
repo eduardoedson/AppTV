@@ -18,9 +18,12 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Video, {
+  AudioTrack,
   OnLoadData,
   OnProgressData,
   ResizeMode,
+  SelectedTrackType,
+  TextTrack,
   VideoRef,
 } from 'react-native-video';
 import { PlayerParams, RootStackParamList } from '../navigation/types';
@@ -88,6 +91,14 @@ interface ResolvedSource {
   error: string | null;
 }
 
+const trackLabel = (
+  track: Pick<AudioTrack | TextTrack, 'index' | 'language' | 'title'>,
+  fallback: string,
+) =>
+  track.title?.trim() ||
+  track.language?.toUpperCase() ||
+  `${fallback} ${track.index + 1}`;
+
 const resolveSource = (source: MediaSource): ResolvedSource => {
   const fromDrive = isDriveSource(source.url, source.provider);
   const needsAuth = fromDrive && isDriveAuthConfigured();
@@ -138,12 +149,29 @@ export function PlayerScreen({ navigation, route }: Props) {
   const [nowMs, setNowMs] = useState(Date.now());
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [focusedScheduleId, setFocusedScheduleId] = useState<string | null>(null);
+  const [includeMovies, setIncludeMovies] = useState(
+    params.tvSchedule?.includeMovies ?? true,
+  );
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
+  const [textTracks, setTextTracks] = useState<TextTrack[]>([]);
+  const [selectedAudioIndex, setSelectedAudioIndex] = useState<number | null>(
+    null,
+  );
+  const [selectedTextIndex, setSelectedTextIndex] = useState<number | null>(
+    null,
+  );
+  const [subtitlesDisabled, setSubtitlesDisabled] = useState(false);
 
   useEffect(() => {
     durationRef.current = 0;
     positionRef.current = 0;
     setDurationMs(0);
     setPositionMs(0);
+    setAudioTracks([]);
+    setTextTracks([]);
+    setSelectedAudioIndex(null);
+    setSelectedTextIndex(null);
+    setSubtitlesDisabled(false);
   }, [contentId, episodeId, sourceId]);
 
   const catalogItem = useMemo(
@@ -286,6 +314,35 @@ export function PlayerScreen({ navigation, route }: Props) {
     });
   }, [app.catalog, navigation, params.tvSchedule, setError]);
 
+  const toggleLiveMovies = useCallback(async () => {
+    if (!params.tvSchedule || !app.catalog) return;
+    const nextIncludeMovies = !includeMovies;
+    const scheduleWithPreference = {
+      ...params.tvSchedule,
+      includeMovies: nextIncludeMovies,
+    };
+    try {
+      const nextSchedule = refreshTvScheduleAfterCurrent(
+        scheduleWithPreference,
+        app.catalog,
+        Date.now(),
+      );
+      await Promise.all([
+        settings.setTvIncludeMovies(nextIncludeMovies),
+        settings.setTvSchedule(nextSchedule),
+      ]);
+      setIncludeMovies(nextIncludeMovies);
+      setError(null);
+      navigation.setParams({tvSchedule: nextSchedule, tvIndex: 0});
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'Não foi possível alterar a presença de filmes na programação.',
+      );
+    }
+  }, [app.catalog, includeMovies, navigation, params.tvSchedule, setError]);
+
   const selectLiveScheduleEntry = useCallback(
     (visibleIndex: number) => {
       if (visibleIndex <= 0 || !params.tvSchedule || !app.catalog) return;
@@ -338,6 +395,35 @@ export function PlayerScreen({ navigation, route }: Props) {
     setPaused(value => !value);
     showControls();
   }, [showControls]);
+
+  const cycleAudioTrack = useCallback(() => {
+    if (audioTracks.length < 2) return;
+    const current = audioTracks.findIndex(
+      track => track.index === selectedAudioIndex,
+    );
+    const next = audioTracks[(current + 1) % audioTracks.length];
+    setSelectedAudioIndex(next.index);
+    showControls();
+  }, [audioTracks, selectedAudioIndex, showControls]);
+
+  const cycleTextTrack = useCallback(() => {
+    if (textTracks.length < 2) return;
+    if (subtitlesDisabled) {
+      setSelectedTextIndex(textTracks[0].index);
+      setSubtitlesDisabled(false);
+    } else {
+      const current = textTracks.findIndex(
+        track => track.index === selectedTextIndex,
+      );
+      const next = current + 1;
+      if (next >= textTracks.length) {
+        setSubtitlesDisabled(true);
+      } else {
+        setSelectedTextIndex(textTracks[Math.max(0, next)].index);
+      }
+    }
+    showControls();
+  }, [selectedTextIndex, showControls, subtitlesDisabled, textTracks]);
 
   // Opens another episode keeping the same version name (for example "Dublado").
   const openEpisode = useCallback(
@@ -637,6 +723,19 @@ export function PlayerScreen({ navigation, route }: Props) {
     durationRef.current = duration;
     setDurationMs(duration);
     setError(null);
+    setAudioTracks(data.audioTracks);
+    setTextTracks(data.textTracks);
+    setSelectedAudioIndex(
+      data.audioTracks.find(track => track.selected)?.index ??
+        data.audioTracks[0]?.index ??
+        null,
+    );
+    setSelectedTextIndex(
+      data.textTracks.find(track => track.selected)?.index ??
+        data.textTracks[0]?.index ??
+        null,
+    );
+    setSubtitlesDisabled(false);
     const liveEntry = params.tvSchedule?.entries[params.tvIndex ?? 0];
     const resume = liveEntry
       ? livePositionForDuration(
@@ -725,6 +824,18 @@ export function PlayerScreen({ navigation, route }: Props) {
           resizeMode={ResizeMode.CONTAIN}
           paused={isLiveTV ? false : paused}
           progressUpdateInterval={1000}
+          selectedAudioTrack={
+            selectedAudioIndex === null
+              ? undefined
+              : {type: SelectedTrackType.INDEX, value: selectedAudioIndex}
+          }
+          selectedTextTrack={
+            subtitlesDisabled
+              ? {type: SelectedTrackType.DISABLED}
+              : selectedTextIndex === null
+                ? undefined
+                : {type: SelectedTrackType.INDEX, value: selectedTextIndex}
+          }
           onLoad={onLoad}
           onProgress={onProgress}
           onEnd={onEnd}
@@ -778,21 +889,30 @@ export function PlayerScreen({ navigation, route }: Props) {
               <Text style={styles.scheduleEyebrow}>CANAL APP TV</Text>
               <Text style={styles.scheduleTitle}>Programação</Text>
             </View>
-            <View style={styles.scheduleActions}>
+            <View style={styles.scheduleControls}>
+              <View style={styles.scheduleActions}>
+                <TVButton
+                  label="Atualizar"
+                  icon="↻"
+                  iconOnly
+                  onPress={refreshLiveSchedule}
+                  style={styles.scheduleAction}
+                />
+                <TVButton
+                  label="Fechar"
+                  icon="×"
+                  iconOnly
+                  onPress={closeSchedule}
+                  hasTVPreferredFocus
+                  style={styles.scheduleAction}
+                />
+              </View>
               <TVButton
-                label="Atualizar"
-                icon="↻"
-                iconOnly
-                onPress={refreshLiveSchedule}
-                style={styles.scheduleAction}
-              />
-              <TVButton
-                label="Fechar"
-                icon="×"
-                iconOnly
-                onPress={closeSchedule}
-                hasTVPreferredFocus
-                style={styles.scheduleAction}
+                label={`Filmes: ${includeMovies ? 'sim' : 'não'}`}
+                icon={includeMovies ? '✓' : '—'}
+                compact
+                onPress={toggleLiveMovies}
+                style={styles.movieToggle}
               />
             </View>
           </View>
@@ -824,9 +944,12 @@ export function PlayerScreen({ navigation, route }: Props) {
                     numberOfLines={2}>
                     {liveLabel(entry)}
                   </Text>
-                  <Text style={index === 0 ? styles.scheduleNow : styles.scheduleNextLabel}>
-                    {index === 0 ? '● AGORA' : index === 1 ? 'A SEGUIR' : 'DEPOIS'}
-                  </Text>
+                  <View style={styles.scheduleEntryMeta}>
+                    <Text style={index === 0 ? styles.scheduleNow : styles.scheduleNextLabel}>
+                      {index === 0 ? '● AGORA' : index === 1 ? 'A SEGUIR' : 'DEPOIS'}
+                    </Text>
+                    <Text style={styles.scheduleKind}>{entry.episode ? 'SÉRIE' : 'FILME'}</Text>
+                  </View>
                 </View>
               </Pressable>
             ))}
@@ -936,6 +1059,32 @@ export function PlayerScreen({ navigation, route }: Props) {
                 {canNavigate ? (
                   <TVButton label="Próximo" onPress={() => navigateQueue(1)} />
                 ) : null}
+                {audioTracks.length > 1 ? (
+                  <TVButton
+                    label={`Áudio: ${trackLabel(
+                      audioTracks.find(
+                        track => track.index === selectedAudioIndex,
+                      ) ?? audioTracks[0],
+                      'Faixa',
+                    )}`}
+                    onPress={cycleAudioTrack}
+                  />
+                ) : null}
+                {textTracks.length > 1 ? (
+                  <TVButton
+                    label={
+                      subtitlesDisabled
+                        ? 'Legenda: Desligada'
+                        : `Legenda: ${trackLabel(
+                            textTracks.find(
+                              track => track.index === selectedTextIndex,
+                            ) ?? textTracks[0],
+                            'Faixa',
+                          )}`
+                    }
+                    onPress={cycleTextTrack}
+                  />
+                ) : null}
                 {canNavigate ? (
                   <TVButton label="Sortear" onPress={playRandomEpisode} />
                 ) : null}
@@ -999,17 +1148,21 @@ const styles = StyleSheet.create({
   schedulePanelHeader: {alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between'},
   scheduleEyebrow: {color: colors.accent, fontSize: 12, fontWeight: '900', letterSpacing: 1.5},
   scheduleTitle: {color: colors.text, fontSize: 28, fontWeight: '900', marginTop: 4},
-  scheduleActions: {flexDirection: 'row'},
-  scheduleAction: {height: 48, justifyContent: 'center', marginBottom: 0, marginRight: 8, paddingHorizontal: 14, paddingVertical: 8, width: 52},
-  scheduleList: {paddingBottom: 30, paddingTop: 22},
-  scheduleEntry: {alignItems: 'center', backgroundColor: colors.surface, borderColor: 'transparent', borderRadius: 11, borderWidth: 2, flexDirection: 'row', marginBottom: 10, minHeight: 86, paddingHorizontal: 14, paddingVertical: 12},
+  scheduleControls: {alignItems: 'stretch', width: 168},
+  scheduleActions: {flexDirection: 'row', justifyContent: 'flex-end'},
+  scheduleAction: {height: 48, justifyContent: 'center', marginBottom: 8, marginRight: 0, marginLeft: 8, paddingHorizontal: 14, paddingVertical: 8, width: 52},
+  movieToggle: {alignSelf: 'stretch', justifyContent: 'center', marginBottom: 0, marginRight: 0},
+  scheduleList: {paddingBottom: 30, paddingTop: 20},
+  scheduleEntry: {alignItems: 'center', backgroundColor: colors.surface, borderColor: 'transparent', borderRadius: 12, borderWidth: 2, flexDirection: 'row', marginBottom: 10, minHeight: 88, paddingHorizontal: 16, paddingVertical: 12},
   scheduleEntryLive: {backgroundColor: colors.surfaceRaised, borderColor: colors.accent},
   scheduleEntryFocused: {backgroundColor: colors.primaryDark, borderColor: colors.focus, transform: [{scale: 1.02}]},
-  scheduleEntryTime: {borderRightColor: colors.surfaceRaised, borderRightWidth: 1, marginRight: 14, width: 58},
+  scheduleEntryTime: {alignItems: 'center', borderRightColor: colors.surfaceRaised, borderRightWidth: 1, marginRight: 16, paddingRight: 14, width: 72},
   scheduleStart: {color: colors.text, fontSize: 17, fontWeight: '900'},
   scheduleEnd: {color: colors.muted, fontSize: 12, marginTop: 3},
   scheduleEntryInfo: {flex: 1},
   scheduleEntryTitle: {color: colors.text, fontSize: 16, fontWeight: '800', lineHeight: 21},
-  scheduleNow: {color: colors.accent, fontSize: 11, fontWeight: '900', marginTop: 6},
-  scheduleNextLabel: {color: colors.muted, fontSize: 11, fontWeight: '900', marginTop: 6},
+  scheduleEntryMeta: {alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 7},
+  scheduleNow: {color: colors.accent, fontSize: 11, fontWeight: '900'},
+  scheduleNextLabel: {color: colors.muted, fontSize: 11, fontWeight: '900'},
+  scheduleKind: {color: colors.muted, fontSize: 10, fontWeight: '800', letterSpacing: 0.8},
 });

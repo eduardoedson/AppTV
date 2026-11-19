@@ -25,7 +25,12 @@ export interface TvSchedule {
   date: string;
   generatedAt: string;
   catalogSignature: string;
+  includeMovies?: boolean;
   entries: TvScheduleEntry[];
+}
+
+export interface TvScheduleOptions {
+  includeMovies?: boolean;
 }
 
 // Schedule entries may use an estimated duration. Keep the live offset inside
@@ -100,8 +105,13 @@ const seededRandom = (seed: number) => {
   };
 };
 
-const candidatesFor = (catalog: Catalog): Candidate[] =>
-  catalog.items.filter(isInLiveTv).flatMap((item: CatalogItem): Candidate[] => {
+const candidatesFor = (
+  catalog: Catalog,
+  {includeMovies = true}: TvScheduleOptions = {},
+): Candidate[] =>
+  catalog.items
+    .filter(item => isInLiveTv(item) && (includeMovies || item.type !== 'movie'))
+    .flatMap((item: CatalogItem): Candidate[] => {
     if (item.type === 'movie') {
       const source = pickSource(item.sources);
       if (!source) return [];
@@ -204,10 +214,12 @@ const fillSchedule = (
 export const createDailyTvSchedule = (
   catalog: Catalog,
   timestamp = Date.now(),
+  options: TvScheduleOptions = {},
 ): TvSchedule => {
   const date = tvDateKey(timestamp);
   const signature = catalogSignature(catalog);
-  const pool = candidatesFor(catalog);
+  const includeMovies = options.includeMovies ?? true;
+  const pool = candidatesFor(catalog, {includeMovies});
   if (!pool.length) throw new Error('A biblioteca não possui vídeos para a TV.');
 
   const random = seededRandom(hash(`${date}:${signature}`));
@@ -219,6 +231,7 @@ export const createDailyTvSchedule = (
     date,
     generatedAt: new Date(timestamp).toISOString(),
     catalogSignature: signature,
+    includeMovies,
     entries,
   };
 };
@@ -228,7 +241,7 @@ export const extendTvSchedule = (
   catalog: Catalog,
   timestamp = Date.now(),
 ): TvSchedule => {
-  const pool = candidatesFor(catalog);
+  const pool = candidatesFor(catalog, {includeMovies: schedule.includeMovies ?? true});
   if (!pool.length) return schedule;
   const lastEnd = Date.parse(schedule.entries.at(-1)?.endAt ?? '');
   const startMs = Number.isFinite(lastEnd) ? lastEnd : timestamp;
@@ -268,7 +281,7 @@ export const promoteTvScheduleEntry = (
   const selected = schedule.entries[selectedIndex];
   if (!selected || selectedIndex <= currentIndex) return schedule;
 
-  const pool = candidatesFor(catalog);
+  const pool = candidatesFor(catalog, {includeMovies: schedule.includeMovies ?? true});
   const endMs = timestamp + 24 * 60 * 60 * 1000;
   const counts = new Map<string, number>();
   counts.set(selected.contentId, 1);
@@ -306,7 +319,10 @@ export const refreshTvScheduleAfterCurrent = (
   const current = schedule.entries[currentTvEntryIndex(schedule, timestamp)];
   if (!current) return schedule;
 
-  const pool = candidatesFor(catalog);
+  const pool = candidatesFor(catalog, {includeMovies: schedule.includeMovies ?? true});
+  if (!pool.length) {
+    throw new Error('Não há séries disponíveis para montar a programação sem filmes.');
+  }
   const endMs = timestamp + 24 * 60 * 60 * 1000;
   const refreshedCurrent: TvScheduleEntry = {
     ...current,
@@ -345,10 +361,12 @@ export const isCurrentTvSchedule = (
   schedule: TvSchedule | null,
   catalog: Catalog,
   timestamp = Date.now(),
+  options: TvScheduleOptions = {},
 ): schedule is TvSchedule =>
   Boolean(
     schedule &&
       schedule.version === 4 &&
+      (schedule.includeMovies ?? true) === (options.includeMovies ?? true) &&
       schedule.catalogSignature === catalogSignature(catalog) &&
       schedule.entries.length &&
       timestamp >= Date.parse(schedule.entries[0].startAt) &&

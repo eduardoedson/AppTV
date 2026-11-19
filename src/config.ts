@@ -17,10 +17,10 @@ export const DEFAULT_CATALOG_URL = ENV_CATALOG_URL || '';
 export const GOOGLE_DRIVE_API_KEY = ENV_DRIVE_API_KEY || '';
 
 // OAuth credentials used to read private Drive files with your own account.
-// The refresh token is created by running: npm run google:login
+// Generate the refresh token for the same Desktop OAuth client outside the app.
 export const GOOGLE_OAUTH_CLIENT_ID = ENV_OAUTH_CLIENT_ID || '';
 export const GOOGLE_OAUTH_CLIENT_SECRET = ENV_OAUTH_CLIENT_SECRET || '';
 export const GOOGLE_OAUTH_REFRESH_TOKEN = ENV_OAUTH_REFRESH_TOKEN || '';
 
-// Update manifest (AppTV.update.json) checked by the version button. Filled by scripts/publicar-apk.ps1
+// Update manifest (AppTV.update.json) checked by the version button. Filled by scripts/publicar-apk.js
 export const UPDATE_MANIFEST_URL = ENV_UPDATE_MANIFEST_URL || '';

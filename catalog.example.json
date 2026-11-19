@@ -1,19 +1,79 @@
 {
   "version": 1,
-  "items": [{
-    "id": "movie-demo",
-    "type": "movie",
-    "title": "Filme de demonstração",
-    "description": "Substitua a URL por um arquivo HTTPS reproduzível.",
-    "addedAt": "2026-10-25T00:00:00Z",
-    "sources": [{
-      "id": "movie-demo-pt-1080",
-      "name": "Dublado",
-      "language": "pt-PT",
-      "quality": "1080p",
-      "mimeType": "video/mp4",
-      "provider": "direct",
-      "url": "https://example.com/video.mp4"
-    }]
-  }]
+  "items": [
+    {
+      "id": "filme-exemplo-2026",
+      "type": "movie",
+      "title": "Filme de exemplo",
+      "year": 2026,
+      "duration": 6120,
+      "description": "Exemplo de filme com duas versões e legenda externa.",
+      "poster": "https://example.com/posters/filme-exemplo.jpg",
+      "backdrop": "https://example.com/backdrops/filme-exemplo.jpg",
+      "genres": ["Aventura", "Comédia"],
+      "addedAt": "2026-11-19T00:00:00Z",
+      "live": false,
+      "sources": [
+        {
+          "id": "filme-exemplo-dual-1080p",
+          "name": "Dual áudio",
+          "language": "Português e Inglês",
+          "quality": "1080p",
+          "mimeType": "video/x-matroska",
+          "provider": "google-drive",
+          "url": "https://drive.google.com/file/d/ID_DO_VIDEO/view",
+          "subtitles": [
+            {
+              "title": "Português (Brasil)",
+              "language": "pt-BR",
+              "type": "srt",
+              "provider": "google-drive",
+              "url": "https://drive.google.com/file/d/ID_DA_LEGENDA/view"
+            }
+          ]
+        },
+        {
+          "id": "filme-exemplo-dublado-720p",
+          "name": "Dublado",
+          "language": "pt-BR",
+          "quality": "720p",
+          "mimeType": "video/mp4",
+          "provider": "direct",
+          "url": "https://example.com/videos/filme-exemplo-720p.mp4"
+        }
+      ]
+    },
+    {
+      "id": "serie-exemplo",
+      "type": "series",
+      "title": "Série de exemplo",
+      "description": "Exemplo mínimo de série.",
+      "poster": "https://example.com/posters/serie-exemplo.jpg",
+      "genres": ["Comédia"],
+      "addedAt": "2026-11-19T00:00:00Z",
+      "seasons": [
+        {
+          "number": 1,
+          "name": "Temporada 1",
+          "episodes": [
+            {
+              "id": "s01e01",
+              "number": 1,
+              "title": "Episódio piloto",
+              "duration": 1440,
+              "sources": [
+                {
+                  "id": "s01e01-original",
+                  "name": "Original",
+                  "language": "pt-BR",
+                  "provider": "google-drive",
+                  "url": "https://drive.google.com/file/d/ID_DO_EPISODIO/view"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }

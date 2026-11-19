@@ -35,7 +35,7 @@ interface Entry {
   resume?: ResumeTarget;
 }
 
-type LibraryTab = 'movie' | 'series';
+type LibraryTab = 'all' | 'movie' | 'series';
 type SortDirection = 'asc' | 'desc';
 
 function CatalogSkeleton({ columnCount }: { columnCount: number }) {
@@ -108,7 +108,7 @@ export function LibraryScreen({ navigation }: Props) {
   const [versionLabel, setVersionLabel] = useState('Versão');
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
-  const [selectedTab, setSelectedTab] = useState<LibraryTab>('series');
+  const [selectedTab, setSelectedTab] = useState<LibraryTab>('all');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   // Show the installed version and check for a new one (cached for 30 minutes)
@@ -149,7 +149,9 @@ export function LibraryScreen({ navigation }: Props) {
   const entries = useMemo(
     () =>
       allEntries
-        .filter(entry => entry.item.type === selectedTab)
+        .filter(
+          entry => selectedTab === 'all' || entry.item.type === selectedTab,
+        )
         .sort((left, right) => {
           const comparison = left.item.title.localeCompare(
             right.item.title,
@@ -295,6 +297,17 @@ export function LibraryScreen({ navigation }: Props) {
       {allEntries.length ? (
         <View style={styles.catalogArea}>
           <View style={styles.tabs}>
+            <TVButton
+              label={`Todos  ·  ${allEntries.length}`}
+              icon="▦"
+              compact
+              emphasized={selectedTab === 'all'}
+              onPress={() => selectTab('all')}
+              style={[
+                styles.tabButton,
+                selectedTab === 'all' && styles.tabButtonSelected,
+              ]}
+            />
             <TVButton
               label={`Séries  ·  ${seriesCount}`}
               icon="▦"

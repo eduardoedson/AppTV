@@ -36,6 +36,7 @@ interface Entry {
 }
 
 type LibraryTab = 'movie' | 'series';
+type SortDirection = 'asc' | 'desc';
 
 function CatalogSkeleton({ columnCount }: { columnCount: number }) {
   return (
@@ -108,6 +109,7 @@ export function LibraryScreen({ navigation }: Props) {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<LibraryTab>('series');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   // Show the installed version and check for a new one (cached for 30 minutes)
   useFocusEffect(
@@ -145,8 +147,18 @@ export function LibraryScreen({ navigation }: Props) {
     [app.catalog, rows],
   );
   const entries = useMemo(
-    () => allEntries.filter(entry => entry.item.type === selectedTab),
-    [allEntries, selectedTab],
+    () =>
+      allEntries
+        .filter(entry => entry.item.type === selectedTab)
+        .sort((left, right) => {
+          const comparison = left.item.title.localeCompare(
+            right.item.title,
+            'pt-BR',
+            {numeric: true, sensitivity: 'base'},
+          );
+          return sortDirection === 'asc' ? comparison : -comparison;
+        }),
+    [allEntries, selectedTab, sortDirection],
   );
   const movieCount = useMemo(
     () => allEntries.filter(entry => entry.item.type === 'movie').length,
@@ -167,6 +179,11 @@ export function LibraryScreen({ navigation }: Props) {
 
   const selectTab = useCallback((tab: LibraryTab) => {
     setSelectedTab(tab);
+    setFocusedItemId(null);
+  }, []);
+
+  const invertSort = useCallback(() => {
+    setSortDirection(current => (current === 'asc' ? 'desc' : 'asc'));
     setFocusedItemId(null);
   }, []);
 
@@ -300,6 +317,14 @@ export function LibraryScreen({ navigation }: Props) {
                 selectedTab === 'movie' && styles.tabButtonSelected,
               ]}
             />
+            <View style={styles.tabDivider} />
+            <TVButton
+              label={sortDirection === 'asc' ? 'A–Z' : 'Z–A'}
+              icon={sortDirection === 'asc' ? '↓' : '↑'}
+              compact
+              onPress={invertSort}
+              style={styles.sortButton}
+            />
           </View>
           <View style={styles.positionIndicator}>
             <Text style={styles.positionText}>
@@ -311,7 +336,7 @@ export function LibraryScreen({ navigation }: Props) {
           ) : (
             <View style={styles.catalogFocusGuide}>
               <FlatList
-                key={`catalog-${selectedTab}-${columnCount}`}
+                key={`catalog-${selectedTab}-${sortDirection}-${columnCount}`}
                 data={entries}
                 keyExtractor={entry => entry.item.id}
                 numColumns={columnCount}
@@ -462,6 +487,22 @@ const styles = StyleSheet.create({
   tabButtonSelected: {
     backgroundColor: '#5E20A9',
     borderColor: '#A85AE9',
+  },
+  tabDivider: {
+    alignSelf: 'stretch',
+    backgroundColor: '#392A48',
+    marginHorizontal: 5,
+    width: 1,
+  },
+  sortButton: {
+    backgroundColor: '#21192B',
+    borderColor: '#3A2A49',
+    borderRadius: 9,
+    marginBottom: 0,
+    marginRight: 0,
+    minWidth: 112,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
   },
   positionIndicator: {
     backgroundColor: 'rgba(23, 17, 32, 0.94)',

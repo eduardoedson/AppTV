@@ -21,6 +21,7 @@ import Video, {
   AudioTrack,
   OnLoadData,
   OnProgressData,
+  OnVideoErrorData,
   ResizeMode,
   SelectedTrackType,
   TextTrack,
@@ -43,6 +44,7 @@ import {
 import {
   describePlaybackError,
   isDriveSource,
+  playbackErrorHttpStatus,
   requestHeadersFor,
   resolveMediaUrl,
 } from '../catalog/sourceResolver';
@@ -85,6 +87,7 @@ const KEY_UP = 1;
 const AUTO_SKIP_SECONDS = 10;
 // Stop skipping after this many failed episodes in a row (connection down, revoked login...)
 const MAX_AUTO_SKIPS = 5;
+const MAX_LIVE_AUTH_RETRIES = 3;
 
 interface ResolvedSource {
   uri: string | null;
@@ -157,6 +160,8 @@ export function PlayerScreen({ navigation, route }: Props) {
   const nextFailuresRef = useRef(0);
   const lastLiveSyncRef = useRef(0);
   const nextSchedulePreparingRef = useRef(false);
+  const liveAuthRetriesRef = useRef(0);
+  const authRefreshInProgressRef = useRef(false);
 
   const [paused, setPaused] = useState(false);
   const [controls, setControlsState] = useState(true);
@@ -195,6 +200,8 @@ export function PlayerScreen({ navigation, route }: Props) {
     setSelectedTextIndex(null);
     setSubtitlesDisabled(false);
     setTrackMenu(null);
+    liveAuthRetriesRef.current = 0;
+    authRefreshInProgressRef.current = false;
   }, [contentId, episodeId, sourceId]);
 
   const catalogItem = useMemo(
@@ -650,9 +657,11 @@ export function PlayerScreen({ navigation, route }: Props) {
         if (!active) return;
         setAccessToken(token);
         setAuthReady(true);
+        authRefreshInProgressRef.current = false;
       })
       .catch(reason => {
         if (!active) return;
+        authRefreshInProgressRef.current = false;
         setError(
           reason instanceof Error
             ? reason.message
@@ -777,6 +786,8 @@ export function PlayerScreen({ navigation, route }: Props) {
     durationRef.current = duration;
     setDurationMs(duration);
     setError(null);
+    liveAuthRetriesRef.current = 0;
+    authRefreshInProgressRef.current = false;
     setAudioTracks(data.audioTracks);
     setTextTracks(data.textTracks);
     setSelectedAudioIndex(
@@ -849,6 +860,26 @@ export function PlayerScreen({ navigation, route }: Props) {
     if (!navigateQueue(1)) navigation.goBack();
   };
 
+  const onPlaybackError = (value: OnVideoErrorData) => {
+    const status = playbackErrorHttpStatus(value.error);
+    if (
+      isLiveTV &&
+      resolved.fromDrive &&
+      resolved.needsAuth &&
+      status === 401 &&
+      !authRefreshInProgressRef.current &&
+      liveAuthRetriesRef.current < MAX_LIVE_AUTH_RETRIES
+    ) {
+      liveAuthRetriesRef.current += 1;
+      authRefreshInProgressRef.current = true;
+      setError(null);
+      setAuthReady(false);
+      setAttempt(current => current + 1);
+      return;
+    }
+    setError(describePlaybackError(value.error, resolved.fromDrive));
+  };
+
   const liveEntry = params.tvSchedule?.entries[params.tvIndex ?? 0];
   const liveNext = params.tvSchedule?.entries[(params.tvIndex ?? 0) + 1];
   const visibleSchedule = params.tvSchedule?.entries.slice(
@@ -897,9 +928,7 @@ export function PlayerScreen({ navigation, route }: Props) {
           onLoad={onLoad}
           onProgress={onProgress}
           onEnd={onEnd}
-          onError={value =>
-            setError(describePlaybackError(value.error, resolved.fromDrive))
-          }
+          onError={onPlaybackError}
         />
       ) : null}
       {isLiveTV && liveEntry && controls ? (

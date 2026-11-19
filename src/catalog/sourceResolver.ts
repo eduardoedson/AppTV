@@ -73,6 +73,31 @@ const normalizedPlayerErrorCode = (error: unknown): string => {
   return rawCode.length === 5 && rawCode.startsWith('2') ? rawCode.slice(1) : rawCode;
 };
 
+export const playbackErrorHttpStatus = (error: unknown): number | null => {
+  const fields =
+    error && typeof error === 'object'
+      ? (error as Record<string, unknown>)
+      : {};
+  const text = (key: string): string => {
+    const value = fields[key];
+    return typeof value === 'string' || typeof value === 'number'
+      ? String(value)
+      : '';
+  };
+  const raw = [
+    text('errorString'),
+    text('errorException'),
+    text('error'),
+    text('localizedDescription'),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const match =
+    raw.match(/Response code:\s*(\d{3})/i) ??
+    raw.match(/\bHTTP\s*(\d{3})\b/i);
+  return match ? Number(match[1]) : null;
+};
+
 export const describePlaybackError = (error: unknown, fromDrive: boolean): string => {
   const fields = error && typeof error === 'object' ? (error as Record<string, unknown>) : {};
   const text = (key: string): string => {
@@ -84,21 +109,21 @@ export const describePlaybackError = (error: unknown, fromDrive: boolean): strin
     .filter(Boolean)
     .join(' ');
   const code = normalizedPlayerErrorCode(error);
-  const status = raw.match(/Response code:\s*(\d{3})/i)?.[1] ?? raw.match(/\bHTTP\s*(\d{3})\b/i)?.[1];
-  if (status === '401') {
+  const status = playbackErrorHttpStatus(error);
+  if (status === 401) {
     return fromDrive ? 'Sessão do Google Drive expirada (HTTP 401). Tente novamente.' : 'Acesso não autorizado (HTTP 401).';
   }
-  if (status === '403') {
+  if (status === 403) {
     return fromDrive
       ? 'Acesso negado pelo Google Drive (HTTP 403). Confira se a conta do login é dona do arquivo ou aguarde: o Drive limita downloads frequentes.'
       : 'Acesso negado pelo servidor (HTTP 403).';
   }
-  if (status === '404') {
+  if (status === 404) {
     return fromDrive
       ? 'Arquivo não encontrado no Google Drive (HTTP 404). Sem login, arquivos privados ou bloqueados pelo Google aparecem assim.'
       : 'Arquivo não encontrado (HTTP 404).';
   }
-  if (status === '429') return 'Limite de acessos atingido (HTTP 429). Tente novamente mais tarde.';
+  if (status === 429) return 'Limite de acessos atingido (HTTP 429). Tente novamente mais tarde.';
   if (status) return `O servidor respondeu com erro (HTTP ${status}).`;
   const suffix = code ? ` (código ${code})` : '';
   const known = PLAYER_ERROR_MESSAGES[code];

@@ -1,4 +1,7 @@
-import {describePlaybackError} from '../src/catalog/sourceResolver';
+import {
+  describePlaybackError,
+  playbackErrorHttpStatus,
+} from '../src/catalog/sourceResolver';
 
 describe('describePlaybackError', () => {
   it('ignores line numbers from the stack trace', () => {
@@ -18,6 +21,17 @@ describe('describePlaybackError', () => {
       errorCode: '2004',
     };
     expect(describePlaybackError(error, true)).toContain('HTTP 403');
+    expect(playbackErrorHttpStatus(error)).toBe(403);
+  });
+
+  it('exposes an expired Drive session for automatic recovery', () => {
+    expect(
+      playbackErrorHttpStatus({
+        errorException:
+          'InvalidResponseCodeException: Response code: 401',
+      }),
+    ).toBe(401);
+    expect(playbackErrorHttpStatus({errorString: 'Source error'})).toBeNull();
   });
 
   it('keeps the player code for unknown errors', () => {

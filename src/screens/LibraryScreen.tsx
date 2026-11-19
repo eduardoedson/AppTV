@@ -107,7 +107,7 @@ export function LibraryScreen({ navigation }: Props) {
   const [versionLabel, setVersionLabel] = useState('Versão');
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
-  const [selectedTab, setSelectedTab] = useState<LibraryTab>('movie');
+  const [selectedTab, setSelectedTab] = useState<LibraryTab>('series');
 
   // Show the installed version and check for a new one (cached for 30 minutes)
   useFocusEffect(
@@ -279,18 +279,7 @@ export function LibraryScreen({ navigation }: Props) {
         <View style={styles.catalogArea}>
           <View style={styles.tabs}>
             <TVButton
-              label={`Filmes  ${movieCount}`}
-              icon="▶"
-              compact
-              emphasized={selectedTab === 'movie'}
-              onPress={() => selectTab('movie')}
-              style={[
-                styles.tabButton,
-                selectedTab === 'movie' && styles.tabButtonSelected,
-              ]}
-            />
-            <TVButton
-              label={`Séries  ${seriesCount}`}
+              label={`Séries  ·  ${seriesCount}`}
               icon="▦"
               compact
               emphasized={selectedTab === 'series'}
@@ -298,6 +287,17 @@ export function LibraryScreen({ navigation }: Props) {
               style={[
                 styles.tabButton,
                 selectedTab === 'series' && styles.tabButtonSelected,
+              ]}
+            />
+            <TVButton
+              label={`Filmes  ·  ${movieCount}`}
+              icon="▶"
+              compact
+              emphasized={selectedTab === 'movie'}
+              onPress={() => selectTab('movie')}
+              style={[
+                styles.tabButton,
+                selectedTab === 'movie' && styles.tabButtonSelected,
               ]}
             />
           </View>
@@ -439,20 +439,29 @@ const styles = StyleSheet.create({
   catalogFocusGuide: { flex: 1 },
   tabs: {
     alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#15101D',
+    borderColor: '#2B2038',
+    borderRadius: 14,
+    borderWidth: 1,
     flexDirection: 'row',
-    height: 58,
-    paddingHorizontal: 14,
-    paddingTop: 10,
+    marginLeft: 14,
+    marginTop: 10,
+    padding: 5,
   },
   tabButton: {
-    backgroundColor: '#21192B',
-    borderColor: '#30243D',
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    borderRadius: 9,
     marginBottom: 0,
-    minWidth: 150,
+    marginRight: 6,
+    minWidth: 178,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
   tabButtonSelected: {
-    backgroundColor: colors.primaryDark,
-    borderColor: colors.accent,
+    backgroundColor: '#5E20A9',
+    borderColor: '#A85AE9',
   },
   positionIndicator: {
     backgroundColor: 'rgba(23, 17, 32, 0.94)',

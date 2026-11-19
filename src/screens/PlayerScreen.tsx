@@ -93,6 +93,8 @@ interface ResolvedSource {
   error: string | null;
 }
 
+type TrackMenu = 'audio' | 'subtitle' | null;
+
 const trackLabel = (
   track: Pick<AudioTrack | TextTrack, 'index' | 'language' | 'title'>,
   fallback: string,
@@ -180,6 +182,7 @@ export function PlayerScreen({ navigation, route }: Props) {
     null,
   );
   const [subtitlesDisabled, setSubtitlesDisabled] = useState(false);
+  const [trackMenu, setTrackMenu] = useState<TrackMenu>(null);
 
   useEffect(() => {
     durationRef.current = 0;
@@ -191,6 +194,7 @@ export function PlayerScreen({ navigation, route }: Props) {
     setSelectedAudioIndex(null);
     setSelectedTextIndex(null);
     setSubtitlesDisabled(false);
+    setTrackMenu(null);
   }, [contentId, episodeId, sourceId]);
 
   const catalogItem = useMemo(
@@ -239,12 +243,12 @@ export function PlayerScreen({ navigation, route }: Props) {
   const showControls = useCallback(() => {
     setControls(true);
     clearHideTimer();
-    if (!errorRef.current && !scheduleOpen)
+    if (!errorRef.current && !scheduleOpen && !trackMenu)
       hideTimer.current = setTimeout(
         () => setControls(false),
         CONTROLS_TIMEOUT_MS,
       );
-  }, [clearHideTimer, scheduleOpen, setControls]);
+  }, [clearHideTimer, scheduleOpen, setControls, trackMenu]);
 
   const openSchedule = useCallback(() => {
     clearHideTimer();
@@ -260,6 +264,10 @@ export function PlayerScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (scheduleOpen) clearHideTimer();
   }, [clearHideTimer, scheduleOpen]);
+
+  useEffect(() => {
+    if (trackMenu) clearHideTimer();
+  }, [clearHideTimer, trackMenu]);
 
   const setError = useCallback(
     (message: string | null) => {
@@ -415,34 +423,42 @@ export function PlayerScreen({ navigation, route }: Props) {
     showControls();
   }, [showControls]);
 
-  const cycleAudioTrack = useCallback(() => {
-    if (audioTracks.length < 2) return;
-    const current = audioTracks.findIndex(
-      track => track.index === selectedAudioIndex,
-    );
-    const next = audioTracks[(current + 1) % audioTracks.length];
-    setSelectedAudioIndex(next.index);
-    showControls();
-  }, [audioTracks, selectedAudioIndex, showControls]);
+  const openTrackMenu = useCallback(
+    (menu: Exclude<TrackMenu, null>) => {
+      clearHideTimer();
+      setControls(true);
+      setTrackMenu(menu);
+    },
+    [clearHideTimer, setControls],
+  );
 
-  const cycleTextTrack = useCallback(() => {
-    if (textTracks.length < 2) return;
-    if (subtitlesDisabled) {
-      setSelectedTextIndex(textTracks[0].index);
-      setSubtitlesDisabled(false);
-    } else {
-      const current = textTracks.findIndex(
-        track => track.index === selectedTextIndex,
+  const closeTrackMenu = useCallback(() => {
+    setTrackMenu(null);
+    clearHideTimer();
+    if (!errorRef.current) {
+      hideTimer.current = setTimeout(
+        () => setControls(false),
+        CONTROLS_TIMEOUT_MS,
       );
-      const next = current + 1;
-      if (next >= textTracks.length) {
-        setSubtitlesDisabled(true);
-      } else {
-        setSelectedTextIndex(textTracks[Math.max(0, next)].index);
-      }
     }
-    showControls();
-  }, [selectedTextIndex, showControls, subtitlesDisabled, textTracks]);
+  }, [clearHideTimer, setControls]);
+
+  const selectAudioTrack = useCallback(
+    (index: number) => {
+      setSelectedAudioIndex(index);
+      closeTrackMenu();
+    },
+    [closeTrackMenu],
+  );
+
+  const selectTextTrack = useCallback(
+    (index: number | null) => {
+      setSubtitlesDisabled(index === null);
+      if (index !== null) setSelectedTextIndex(index);
+      closeTrackMenu();
+    },
+    [closeTrackMenu],
+  );
 
   // Opens another episode keeping the same version name (for example "Dublado").
   const openEpisode = useCallback(
@@ -699,6 +715,10 @@ export function PlayerScreen({ navigation, route }: Props) {
         }
         return false;
       }
+      if (trackMenu) {
+        closeTrackMenu();
+        return true;
+      }
       if (controlsRef.current) {
         setControls(false);
         return true;
@@ -750,7 +770,7 @@ export function PlayerScreen({ navigation, route }: Props) {
       back.remove();
       subscription?.remove();
     };
-  }, [closeSchedule, isLiveTV, scheduleOpen, seekBy, setControls, showControls, togglePause]);
+  }, [closeSchedule, closeTrackMenu, isLiveTV, scheduleOpen, seekBy, setControls, showControls, togglePause, trackMenu]);
 
   const onLoad = (data: OnLoadData) => {
     const duration = data.duration * 1000;
@@ -1034,6 +1054,88 @@ export function PlayerScreen({ navigation, route }: Props) {
             ) : null}
           </View>
 
+          {trackMenu ? (
+            <TVFocusGuideView
+              autoFocus
+              trapFocusDown
+              trapFocusLeft
+              trapFocusRight
+              trapFocusUp
+              style={styles.trackPanel}>
+              <View style={styles.trackPanelHeader}>
+                <View>
+                  <Text style={styles.trackEyebrow}>REPRODUÇÃO</Text>
+                  <Text style={styles.trackTitle}>
+                    {trackMenu === 'audio'
+                      ? 'Escolher áudio'
+                      : 'Escolher legenda'}
+                  </Text>
+                </View>
+                <TVButton
+                  label="Fechar"
+                  icon="×"
+                  iconOnly
+                  compact
+                  onPress={closeTrackMenu}
+                  style={styles.trackClose}
+                />
+              </View>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.trackList}>
+                {trackMenu === 'audio'
+                  ? audioTracks.map(track => {
+                      const selected = track.index === selectedAudioIndex;
+                      return (
+                        <TVButton
+                          key={`audio-${track.index}`}
+                          label={`${selected ? '✓  ' : ''}${trackLabel(
+                            track,
+                            'Faixa',
+                          )}`}
+                          icon="♫"
+                          emphasized={selected}
+                          hasTVPreferredFocus={selected}
+                          onPress={() => selectAudioTrack(track.index)}
+                          style={styles.trackOption}
+                        />
+                      );
+                    })
+                  : (
+                      <>
+                        <TVButton
+                          label={`${subtitlesDisabled ? '✓  ' : ''}Desligada`}
+                          icon="⊘"
+                          emphasized={subtitlesDisabled}
+                          hasTVPreferredFocus={subtitlesDisabled}
+                          onPress={() => selectTextTrack(null)}
+                          style={styles.trackOption}
+                        />
+                        {textTracks.map(track => {
+                          const selected =
+                            !subtitlesDisabled &&
+                            track.index === selectedTextIndex;
+                          return (
+                            <TVButton
+                              key={`subtitle-${track.index}`}
+                              label={`${selected ? '✓  ' : ''}${trackLabel(
+                                track,
+                                'Faixa',
+                              )}`}
+                              icon="CC"
+                              emphasized={selected}
+                              hasTVPreferredFocus={selected}
+                              onPress={() => selectTextTrack(track.index)}
+                              style={styles.trackOption}
+                            />
+                          );
+                        })}
+                      </>
+                    )}
+              </ScrollView>
+            </TVFocusGuideView>
+          ) : null}
+
           <View style={styles.bottomControls}>
             <ProgressBar
               ratio={durationMs ? positionMs / durationMs : 0}
@@ -1105,10 +1207,11 @@ export function PlayerScreen({ navigation, route }: Props) {
                       ) ?? audioTracks[0],
                       'Faixa',
                     )}`}
-                    onPress={cycleAudioTrack}
+                    icon="♫"
+                    onPress={() => openTrackMenu('audio')}
                   />
                 ) : null}
-                {textTracks.length > 1 ? (
+                {textTracks.length > 0 ? (
                   <TVButton
                     label={
                       subtitlesDisabled
@@ -1120,7 +1223,8 @@ export function PlayerScreen({ navigation, route }: Props) {
                             'Faixa',
                           )}`
                     }
-                    onPress={cycleTextTrack}
+                    icon="CC"
+                    onPress={() => openTrackMenu('subtitle')}
                   />
                 ) : null}
                 {canNavigate ? (
@@ -1159,6 +1263,48 @@ const styles = StyleSheet.create({
     left: 48,
     position: 'absolute',
     right: 48,
+  },
+  trackPanel: {
+    backgroundColor: 'rgba(21, 16, 29, 0.98)',
+    borderColor: colors.primary,
+    borderRadius: 16,
+    borderWidth: 2,
+    maxHeight: '72%',
+    padding: 22,
+    position: 'absolute',
+    right: 48,
+    top: 108,
+    width: 430,
+    zIndex: 30,
+  },
+  trackPanelHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  trackEyebrow: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  trackTitle: {
+    color: colors.text,
+    fontSize: 25,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+  trackClose: {
+    height: 46,
+    marginBottom: 0,
+    marginRight: 0,
+    width: 52,
+  },
+  trackList: {paddingTop: 18},
+  trackOption: {
+    alignSelf: 'stretch',
+    justifyContent: 'flex-start',
+    marginRight: 0,
   },
   title: { color: colors.text, fontSize: 30, fontWeight: '900' },
   episode: { color: colors.text, fontSize: 20, marginTop: 4 },

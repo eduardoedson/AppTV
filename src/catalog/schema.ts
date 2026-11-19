@@ -1,5 +1,17 @@
 // Shared definitions used to validate each catalog item individually.
 const definitions = {
+  subtitle: {
+    type: 'object',
+    required: ['title', 'language', 'type', 'url'],
+    properties: {
+      title: {type: 'string', minLength: 1},
+      language: {type: 'string', minLength: 2},
+      type: {enum: ['srt', 'vtt', 'ttml']},
+      url: {type: 'string', pattern: '^https://'},
+      provider: {enum: ['direct', 'google-drive']},
+    },
+    additionalProperties: true,
+  },
   source: {
     type: 'object',
     required: ['id', 'name', 'url'],
@@ -12,6 +24,10 @@ const definitions = {
       language: {type: 'string'},
       quality: {type: 'string'},
       mimeType: {type: 'string'},
+      subtitles: {
+        type: 'array',
+        items: {$ref: '#/$defs/subtitle'},
+      },
     },
     additionalProperties: true,
   },

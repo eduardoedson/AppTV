@@ -1,5 +1,13 @@
 export type MediaProvider = 'direct' | 'google-drive';
 
+export interface MediaSubtitleTrack {
+  title: string;
+  language: string;
+  type: 'srt' | 'vtt' | 'ttml';
+  url: string;
+  provider?: MediaProvider;
+}
+
 export interface MediaSource {
   id: string;
   name: string;
@@ -9,6 +17,7 @@ export interface MediaSource {
   quality?: string;
   mimeType?: string;
   provider?: MediaProvider;
+  subtitles?: MediaSubtitleTrack[];
 }
 
 export interface CatalogBaseItem {

@@ -24,6 +24,8 @@ import Video, {
   ResizeMode,
   SelectedTrackType,
   TextTrack,
+  TextTrackType,
+  TextTracks,
   VideoRef,
 } from 'react-native-video';
 import { PlayerParams, RootStackParamList } from '../navigation/types';
@@ -635,6 +637,21 @@ export function PlayerScreen({ navigation, route }: Props) {
     [accessToken, source.provider, source.url],
   );
 
+  const externalTextTracks = useMemo<TextTracks | undefined>(() => {
+    if (!source.subtitles?.length) return undefined;
+    const types = {
+      srt: TextTrackType.SUBRIP,
+      ttml: TextTrackType.TTML,
+      vtt: TextTrackType.VTT,
+    } as const;
+    return source.subtitles.map(subtitle => ({
+      title: subtitle.title,
+      language: subtitle.language,
+      type: types[subtitle.type],
+      uri: resolveMediaUrl(subtitle.url, subtitle.provider),
+    })) as TextTracks;
+  }, [source.subtitles]);
+
   // Remember the chosen version for this movie or series.
   useEffect(() => {
     preferenceRepository.saveSourceName(contentId, source.name);
@@ -819,6 +836,7 @@ export function PlayerScreen({ navigation, route }: Props) {
           source={{
             uri: resolved.uri,
             headers: requestHeaders,
+            textTracks: externalTextTracks,
           }}
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.CONTAIN}

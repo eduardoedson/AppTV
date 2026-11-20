@@ -10,13 +10,13 @@
 
 <!-- APP_VERSION_START -->
 <p align="center">
-  <img alt="Versão 1.30" src="https://img.shields.io/badge/vers%C3%A3o-1.30-7C3AED">
-  <img alt="Build 31" src="https://img.shields.io/badge/build-31-2563EB">
+  <img alt="Versão 1.31" src="https://img.shields.io/badge/vers%C3%A3o-1.31-7C3AED">
+  <img alt="Build 32" src="https://img.shields.io/badge/build-32-2563EB">
   <img alt="Android TV" src="https://img.shields.io/badge/plataforma-Android%20TV-16A34A">
   <img alt="Uso privado" src="https://img.shields.io/badge/distribui%C3%A7%C3%A3o-privada-374151">
 </p>
 
-> **Versão publicada:** `1.30` · **Build:** `31` · **Publicada em:** 19/11/2026
+> **Versão publicada:** `1.31` · **Build:** `32` · **Publicada em:** 20/11/2026
 <!-- APP_VERSION_END -->
 
 O AppTV é feito em React Native TV e transforma um catálogo JSON em uma experiência completa para controle remoto. Catálogo, vídeos, legendas e atualizações podem ficar no **Google Drive privado**, acessados pela API oficial com uma conta autorizada.
@@ -27,7 +27,7 @@ O AppTV é feito em React Native TV e transforma um catálogo JSON em uma experi
 |---|---|
 | Biblioteca | Abas Todos, Séries e Filmes, ordenação A–Z/Z–A e progresso |
 | Reprodução | Retomada, avanço automático, faixas de áudio e legendas embutidas ou externas |
-| Ao vivo | Grade diária, áudio pt-BR, legendas desligadas e recuperação de autorização |
+| Ao vivo | Grade diária com 5–8 episódios entre filmes, áudio pt-BR e legendas desligadas |
 | Catálogo | JSON validado, fontes diretas ou Drive, cache e sincronização de séries |
 | Atualizações | APK e manifesto publicados no Drive, com instalação pelo próprio app |
 
@@ -55,6 +55,8 @@ O AppTV é feito em React Native TV e transforma um catálogo JSON em uma experi
 - Várias versões por título (por exemplo Dublado e Legendado), com a escolha lembrada por série.
 - Seleção de faixa de áudio e legenda durante a reprodução. Faixas embutidas são detectadas pelo player, legendas externas podem vir do catálogo e a opção **Desligada** fica sempre disponível quando há legendas.
 - No **Ao vivo**, o app prefere áudio em português/pt-BR, mantém as legendas desligadas e renova automaticamente a autorização do Drive quando ela expira durante a reprodução.
+- Quando filmes estão habilitados no **Ao vivo**, cada filme é separado do próximo por um bloco determinístico de 5 a 8 episódios de séries.
+- O painel da programação permite alternar o conteúdo entre **Todos**, **Filmes** e **Séries**; a preferência fica salva na TV.
 - Catálogo em cache para funcionar sem conexão.
 - **Atualização do app pelo próprio app**: botão de versão no topo da biblioteca, com download e instalação do novo APK.
 

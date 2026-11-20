@@ -70,6 +70,7 @@ import {
   promoteTvScheduleEntry,
   refreshTvScheduleAfterCurrent,
   shouldPrepareNextTvSchedule,
+  TvContentMode,
 } from '../domain/tvSchedule';
 import { settings } from '../storage/settings';
 
@@ -175,8 +176,8 @@ export function PlayerScreen({ navigation, route }: Props) {
   const [nowMs, setNowMs] = useState(Date.now());
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [focusedScheduleId, setFocusedScheduleId] = useState<string | null>(null);
-  const [includeMovies, setIncludeMovies] = useState(
-    params.tvSchedule?.includeMovies ?? true,
+  const [tvContentMode, setTvContentMode] = useState<TvContentMode>(
+    params.tvSchedule?.contentMode ?? 'all',
   );
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [textTracks, setTextTracks] = useState<TextTrack[]>([]);
@@ -348,12 +349,16 @@ export function PlayerScreen({ navigation, route }: Props) {
     });
   }, [app.catalog, navigation, params.tvSchedule, setError]);
 
-  const toggleLiveMovies = useCallback(async () => {
+  const toggleLiveContentMode = useCallback(async () => {
     if (!params.tvSchedule || !app.catalog) return;
-    const nextIncludeMovies = !includeMovies;
+    const nextContentMode: TvContentMode = tvContentMode === 'all'
+      ? 'movies'
+      : tvContentMode === 'movies'
+      ? 'series'
+      : 'all';
     const scheduleWithPreference = {
       ...params.tvSchedule,
-      includeMovies: nextIncludeMovies,
+      contentMode: nextContentMode,
     };
     try {
       const nextSchedule = refreshTvScheduleAfterCurrent(
@@ -362,20 +367,20 @@ export function PlayerScreen({ navigation, route }: Props) {
         Date.now(),
       );
       await Promise.all([
-        settings.setTvIncludeMovies(nextIncludeMovies),
+        settings.setTvContentMode(nextContentMode),
         settings.setTvSchedule(nextSchedule),
       ]);
-      setIncludeMovies(nextIncludeMovies);
+      setTvContentMode(nextContentMode);
       setError(null);
       navigation.setParams({tvSchedule: nextSchedule, tvIndex: 0});
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : 'Não foi possível alterar a presença de filmes na programação.',
+          : 'Não foi possível alterar o conteúdo da programação.',
       );
     }
-  }, [app.catalog, includeMovies, navigation, params.tvSchedule, setError]);
+  }, [app.catalog, navigation, params.tvSchedule, setError, tvContentMode]);
 
   const selectLiveScheduleEntry = useCallback(
     (visibleIndex: number) => {
@@ -995,10 +1000,10 @@ export function PlayerScreen({ navigation, route }: Props) {
                 />
               </View>
               <TVButton
-                label={`Filmes: ${includeMovies ? 'sim' : 'não'}`}
-                icon={includeMovies ? '✓' : '—'}
+                label={`Conteúdo: ${tvContentMode === 'all' ? 'Todos' : tvContentMode === 'movies' ? 'Filmes' : 'Séries'}`}
+                icon={tvContentMode === 'all' ? '◉' : tvContentMode === 'movies' ? '◆' : '▣'}
                 compact
-                onPress={toggleLiveMovies}
+                onPress={toggleLiveContentMode}
                 style={styles.movieToggle}
               />
             </View>

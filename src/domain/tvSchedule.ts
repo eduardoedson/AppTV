@@ -21,17 +21,19 @@ export interface TvScheduleEntry {
 }
 
 export interface TvSchedule {
-  version: 4;
+  version: 6;
   date: string;
   generatedAt: string;
   catalogSignature: string;
-  includeMovies?: boolean;
+  contentMode: TvContentMode;
   entries: TvScheduleEntry[];
 }
 
 export interface TvScheduleOptions {
-  includeMovies?: boolean;
+  contentMode?: TvContentMode;
 }
+
+export type TvContentMode = 'all' | 'movies' | 'series';
 
 // Schedule entries may use an estimated duration. Keep the live offset inside
 // the real media duration so the player never starts past the end of a file.
@@ -57,6 +59,8 @@ interface Candidate {
 // player repeats it until the next wall-clock slot.
 const MOVIE_FALLBACK_SECONDS = 100 * 60;
 const EPISODE_FALLBACK_SECONDS = 60 * 60;
+const MIN_EPISODES_BETWEEN_MOVIES = 5;
+const MAX_EPISODES_BETWEEN_MOVIES = 8;
 
 const localDateKey = (date: Date): string => {
   const year = date.getFullYear();
@@ -107,10 +111,15 @@ const seededRandom = (seed: number) => {
 
 const candidatesFor = (
   catalog: Catalog,
-  {includeMovies = true}: TvScheduleOptions = {},
+  {contentMode = 'all'}: TvScheduleOptions = {},
 ): Candidate[] =>
   catalog.items
-    .filter(item => isInLiveTv(item) && (includeMovies || item.type !== 'movie'))
+    .filter(item =>
+      isInLiveTv(item) &&
+      (contentMode === 'all' ||
+        (contentMode === 'movies' && item.type === 'movie') ||
+        (contentMode === 'series' && item.type === 'series')),
+    )
     .flatMap((item: CatalogItem): Candidate[] => {
     if (item.type === 'movie') {
       const source = pickSource(item.sources);
@@ -181,6 +190,48 @@ const balancedCandidates = (
   };
 };
 
+// When movies and series are both enabled, place a deterministic block of
+// 5–8 series episodes between movies. Each kind still uses balanced rounds,
+// so neither a large series nor a large movie collection dominates the grid.
+const interleavedCandidates = (
+  pool: Candidate[],
+  random: () => number,
+  initialCounts: Map<string, number> = new Map(),
+  precedingEntries: TvScheduleEntry[] = [],
+) => {
+  const movies = pool.filter(candidate => !candidate.episode);
+  const episodes = pool.filter(candidate => candidate.episode);
+  if (!movies.length || !episodes.length) {
+    return balancedCandidates(pool, random, initialCounts);
+  }
+
+  const pickMovie = balancedCandidates(movies, random, initialCounts);
+  const pickEpisode = balancedCandidates(episodes, random, initialCounts);
+  let lastMovieIndex = -1;
+  for (let index = precedingEntries.length - 1; index >= 0; index -= 1) {
+    if (!precedingEntries[index].episode) {
+      lastMovieIndex = index;
+      break;
+    }
+  }
+  let episodesSinceMovie = lastMovieIndex < 0
+    ? null
+    : precedingEntries.slice(lastMovieIndex + 1).filter(entry => entry.episode).length;
+  let episodeTarget = MIN_EPISODES_BETWEEN_MOVIES +
+    Math.floor(random() * (MAX_EPISODES_BETWEEN_MOVIES - MIN_EPISODES_BETWEEN_MOVIES + 1));
+
+  return (): Candidate => {
+    if (episodesSinceMovie === null || episodesSinceMovie >= episodeTarget) {
+      episodesSinceMovie = 0;
+      episodeTarget = MIN_EPISODES_BETWEEN_MOVIES +
+        Math.floor(random() * (MAX_EPISODES_BETWEEN_MOVIES - MIN_EPISODES_BETWEEN_MOVIES + 1));
+      return pickMovie();
+    }
+    episodesSinceMovie += 1;
+    return pickEpisode();
+  };
+};
+
 const fillSchedule = (
   pool: Candidate[],
   random: () => number,
@@ -189,8 +240,9 @@ const fillSchedule = (
   endMs: number,
   startNumber = 1,
   initialCounts: Map<string, number> = new Map(),
+  precedingEntries: TvScheduleEntry[] = [],
 ): TvScheduleEntry[] => {
-  const pickNext = balancedCandidates(pool, random, initialCounts);
+  const pickNext = interleavedCandidates(pool, random, initialCounts, precedingEntries);
   const entries: TvScheduleEntry[] = [];
   let cursor = startMs;
   while (cursor < endMs) {
@@ -218,8 +270,8 @@ export const createDailyTvSchedule = (
 ): TvSchedule => {
   const date = tvDateKey(timestamp);
   const signature = catalogSignature(catalog);
-  const includeMovies = options.includeMovies ?? true;
-  const pool = candidatesFor(catalog, {includeMovies});
+  const contentMode = options.contentMode ?? 'all';
+  const pool = candidatesFor(catalog, {contentMode});
   if (!pool.length) throw new Error('A biblioteca não possui vídeos para a TV.');
 
   const random = seededRandom(hash(`${date}:${signature}`));
@@ -227,11 +279,11 @@ export const createDailyTvSchedule = (
   const entries = fillSchedule(pool, random, date, startMs, endMs);
 
   return {
-    version: 4,
+    version: 6,
     date,
     generatedAt: new Date(timestamp).toISOString(),
     catalogSignature: signature,
-    includeMovies,
+    contentMode,
     entries,
   };
 };
@@ -241,7 +293,7 @@ export const extendTvSchedule = (
   catalog: Catalog,
   timestamp = Date.now(),
 ): TvSchedule => {
-  const pool = candidatesFor(catalog, {includeMovies: schedule.includeMovies ?? true});
+  const pool = candidatesFor(catalog, {contentMode: schedule.contentMode});
   if (!pool.length) return schedule;
   const lastEnd = Date.parse(schedule.entries.at(-1)?.endAt ?? '');
   const startMs = Number.isFinite(lastEnd) ? lastEnd : timestamp;
@@ -258,6 +310,7 @@ export const extendTvSchedule = (
     startMs + 24 * 60 * 60 * 1000,
     schedule.entries.length + 1,
     counts,
+    schedule.entries,
   );
   return {
     ...schedule,
@@ -281,7 +334,7 @@ export const promoteTvScheduleEntry = (
   const selected = schedule.entries[selectedIndex];
   if (!selected || selectedIndex <= currentIndex) return schedule;
 
-  const pool = candidatesFor(catalog, {includeMovies: schedule.includeMovies ?? true});
+  const pool = candidatesFor(catalog, {contentMode: schedule.contentMode});
   const endMs = timestamp + 24 * 60 * 60 * 1000;
   const counts = new Map<string, number>();
   counts.set(selected.contentId, 1);
@@ -303,6 +356,7 @@ export const promoteTvScheduleEntry = (
     endMs,
     2,
     counts,
+    [promoted],
   );
   return {
     ...schedule,
@@ -319,7 +373,7 @@ export const refreshTvScheduleAfterCurrent = (
   const current = schedule.entries[currentTvEntryIndex(schedule, timestamp)];
   if (!current) return schedule;
 
-  const pool = candidatesFor(catalog, {includeMovies: schedule.includeMovies ?? true});
+  const pool = candidatesFor(catalog, {contentMode: schedule.contentMode});
   if (!pool.length) {
     throw new Error('Não há séries disponíveis para montar a programação sem filmes.');
   }
@@ -338,6 +392,7 @@ export const refreshTvScheduleAfterCurrent = (
     endMs,
     2,
     counts,
+    [refreshedCurrent],
   );
   return {
     ...schedule,
@@ -365,8 +420,8 @@ export const isCurrentTvSchedule = (
 ): schedule is TvSchedule =>
   Boolean(
     schedule &&
-      schedule.version === 4 &&
-      (schedule.includeMovies ?? true) === (options.includeMovies ?? true) &&
+      schedule.version === 6 &&
+      schedule.contentMode === (options.contentMode ?? 'all') &&
       schedule.catalogSignature === catalogSignature(catalog) &&
       schedule.entries.length &&
       timestamp >= Date.parse(schedule.entries[0].startAt) &&

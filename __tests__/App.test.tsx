@@ -143,11 +143,8 @@ test('cria programação diária determinística sem cortar o último item à me
   expect(Date.parse(first.entries[0].startAt)).toBe(new Date(2026, 10, 7).getTime());
   expect(Date.parse(first.entries.at(-1)!.startAt)).toBeLessThan(new Date(2026, 10, 8).getTime());
   expect(Date.parse(first.entries.at(-1)!.endAt)).toBeGreaterThanOrEqual(new Date(2026, 10, 8).getTime());
-  const counts = first.entries.reduce<Record<string, number>>((result, entry) => {
-    result[entry.contentId] = (result[entry.contentId] ?? 0) + 1;
-    return result;
-  }, {});
-  expect(Math.max(...Object.values(counts)) - Math.min(...Object.values(counts))).toBeLessThanOrEqual(1);
+  expect(first.entries[0].episode).toBeUndefined();
+  expect(first.entries.slice(1).every(entry => Boolean(entry.episode))).toBe(true);
   expect(new Set(first.entries.filter(entry => entry.episode).map(entry => entry.episode!.id)).size)
     .toBe(first.entries.filter(entry => entry.episode).length);
   expect(currentTvEntryIndex(first, timestamp)).toBeGreaterThanOrEqual(0);
@@ -157,7 +154,7 @@ test('reserva uma hora para episódios sem duração para não os cortar', () =>
   const timestamp = new Date(2026, 10, 7, 12, 0, 0).getTime();
   const catalog = validateCatalog({version: 1, items: [series]}).catalog;
   const schedule = createDailyTvSchedule(catalog, timestamp);
-  expect(schedule.version).toBe(4);
+  expect(schedule.version).toBe(6);
   expect(schedule.entries[0].estimatedDuration).toBe(true);
   expect(schedule.entries[0].durationSeconds).toBe(60 * 60);
 });
@@ -245,7 +242,7 @@ test('desliga filmes sem alterar o programa que está no ar', () => {
   const schedule = createDailyTvSchedule(catalog, timestamp);
   const current = schedule.entries[currentTvEntryIndex(schedule, timestamp)];
   const withoutMovies = refreshTvScheduleAfterCurrent(
-    {...schedule, includeMovies: false},
+    {...schedule, contentMode: 'series'},
     catalog,
     timestamp,
   );

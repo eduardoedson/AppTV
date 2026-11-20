@@ -70,3 +70,47 @@ describe('live flag in the catalog', () => {
     expect(invalid.catalog.items.map(item => item.id)).toEqual(['b']);
   });
 });
+
+describe('movie spacing in the live schedule', () => {
+  it('places between 5 and 8 series episodes between consecutive movies', () => {
+    const catalog = catalogOf(
+      series('series-a'),
+      series('series-b'),
+      movie('movie-a'),
+      movie('movie-b'),
+      movie('movie-c'),
+    );
+    const entries = createDailyTvSchedule(catalog, NOON).entries;
+    const movieIndexes = entries
+      .map((entry, index) => entry.episode ? -1 : index)
+      .filter(index => index >= 0);
+
+    expect(movieIndexes.length).toBeGreaterThan(2);
+    for (let index = 1; index < movieIndexes.length; index += 1) {
+      const between = entries.slice(movieIndexes[index - 1] + 1, movieIndexes[index]);
+      expect(between.every(entry => Boolean(entry.episode))).toBe(true);
+      expect(between.length).toBeGreaterThanOrEqual(5);
+      expect(between.length).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it('keeps a series-only schedule working when movies are disabled', () => {
+    const entries = createDailyTvSchedule(catalogOf(series('series-a')), NOON, {contentMode: 'series'}).entries;
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.every(entry => Boolean(entry.episode))).toBe(true);
+  });
+
+  it('supports Todos, Filmes and Séries as distinct schedule modes', () => {
+    const catalog = catalogOf(series('series-a'), movie('movie-a'));
+    const all = createDailyTvSchedule(catalog, NOON, {contentMode: 'all'});
+    const movies = createDailyTvSchedule(catalog, NOON, {contentMode: 'movies'});
+    const seriesOnly = createDailyTvSchedule(catalog, NOON, {contentMode: 'series'});
+
+    expect(all.entries.some(entry => Boolean(entry.episode))).toBe(true);
+    expect(all.entries.some(entry => !entry.episode)).toBe(true);
+    expect(movies.entries.every(entry => !entry.episode)).toBe(true);
+    expect(seriesOnly.entries.every(entry => Boolean(entry.episode))).toBe(true);
+    expect(isCurrentTvSchedule(movies, catalog, NOON, {contentMode: 'movies'})).toBe(true);
+    expect(isCurrentTvSchedule(movies, catalog, NOON, {contentMode: 'all'})).toBe(false);
+  });
+});

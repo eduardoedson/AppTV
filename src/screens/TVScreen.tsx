@@ -42,13 +42,13 @@ export function TVScreen({navigation, route}: Props) {
   const loadSchedule = useCallback(async () => {
     if (!catalog) return;
     try {
-      const [saved, includeMovies] = await Promise.all([
+      const [saved, contentMode] = await Promise.all([
         settings.getTvSchedule(),
-        settings.getTvIncludeMovies(),
+        settings.getTvContentMode(),
       ]);
-      const next = isCurrentTvSchedule(saved, catalog, Date.now(), {includeMovies})
+      const next = isCurrentTvSchedule(saved, catalog, Date.now(), {contentMode})
         ? saved
-        : createDailyTvSchedule(catalog, Date.now(), {includeMovies});
+        : createDailyTvSchedule(catalog, Date.now(), {contentMode});
       if (next !== saved) await settings.setTvSchedule(next);
       setSchedule(next);
       setError(null);

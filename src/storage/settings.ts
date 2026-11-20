@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {TvSchedule} from '../domain/tvSchedule';
+import {TvContentMode, TvSchedule} from '../domain/tvSchedule';
 
 const CATALOG_URL_KEY = 'apptv.settings.catalogUrl';
 const TV_SCHEDULE_KEY = 'apptv.tv.schedule';
 const TV_INCLUDE_MOVIES_KEY = 'apptv.tv.includeMovies';
+const TV_CONTENT_MODE_KEY = 'apptv.tv.contentMode';
 
 export const settings = {
   getCatalogUrl: () => AsyncStorage.getItem(CATALOG_URL_KEY),
@@ -19,8 +20,14 @@ export const settings = {
   },
   setTvSchedule: (schedule: TvSchedule) =>
     AsyncStorage.setItem(TV_SCHEDULE_KEY, JSON.stringify(schedule)),
-  getTvIncludeMovies: async (): Promise<boolean> =>
-    (await AsyncStorage.getItem(TV_INCLUDE_MOVIES_KEY)) !== 'false',
-  setTvIncludeMovies: (includeMovies: boolean) =>
-    AsyncStorage.setItem(TV_INCLUDE_MOVIES_KEY, String(includeMovies)),
+  getTvContentMode: async (): Promise<TvContentMode> => {
+    const mode = await AsyncStorage.getItem(TV_CONTENT_MODE_KEY);
+    if (mode === 'all' || mode === 'movies' || mode === 'series') return mode;
+    // Migrate the previous Filmes sim/não preference.
+    return (await AsyncStorage.getItem(TV_INCLUDE_MOVIES_KEY)) === 'false'
+      ? 'series'
+      : 'all';
+  },
+  setTvContentMode: (mode: TvContentMode) =>
+    AsyncStorage.setItem(TV_CONTENT_MODE_KEY, mode),
 };
